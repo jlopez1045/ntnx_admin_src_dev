@@ -49,8 +49,6 @@ config = configparser.ConfigParser()
 config_file = str(os.path.dirname(__file__)) + '/srv_config.txt'
 config.read_file(open(config_file))
 
-#proxies = {'http': '', 'https': ''}
-
 prism_username = config.get('USER', 'prism_username')
 cli_username = config.get('USER', 'cli_username')
 domain_suffix = config.get('USER', 'domain_suffix')
@@ -212,21 +210,19 @@ def run_lcm_inventory(srv):
     config = ntnx_lcm_py_client.configuration.Configuration()
     config.host = str(srv)
     config.port = 9440
+    config.verify_ssl = bool(verify_ssl)
     config.max_retry_attempts = 1
     config.backoff_factor = 3
     config.username = str(prism_username)
     config.password = str(prism_password)
 
-    config.proxy_scheme = str(proxy_scheme)
-    config.proxy_host = "127.0.0.1"
-    config.proxy_port = int(proxy_port)
-    config.proxy_username = ""
-    config.proxy_password = ""
+    #config.proxy_scheme = str(proxy_scheme)
+    #config.proxy_host = "127.0.0.1"
+    #config.proxy_port = int(proxy_port)
+    #config.proxy_username = ""
+    #config.proxy_password = ""
 
-    client = ntnx_prism_py_client.ApiClient(configuration=config)
-    #client.select_header_accept()
-    #client.add_default_header(header_name='Accept-Encoding', header_value='gzip, deflate, br')
-
+    client = ntnx_lcm_py_client.ApiClient(configuration=config)
     inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
     api_response = inventoryApi.inventory()
 
