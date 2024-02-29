@@ -1,0 +1,18 @@
+[USER]
+prism_username = admin
+cli_username = nutanix
+domain_suffix = statestr.com
+
+[UPGRADE]
+aos_build = 6.5.5.1
+aos_md5 = 1b4c861d823e282d86059a3ead3eb1ab
+
+[PROXY]
+proxy_scheme = https
+proxy_host = zproxy.statestreet.com
+proxy_port = 80
+proxy_username =
+proxy_password =
+
+[SETTINGS]
+verify_ssl = False
