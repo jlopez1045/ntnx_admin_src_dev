@@ -392,7 +392,13 @@ def check_lcm_task(srv):
     api_response = statusApi.get_status()
 
     if api_response:
-        print(api_response)
+        # print(api_response)
+
+        data = api_response['data']
+        running = data['inProgressOperations']
+        for x in running:
+            print(x)
+
         return "DONE"
 
     else:
@@ -696,7 +702,7 @@ def upgrade_loop(srv, build, md5, job_status, logging):
 
         run_lcm_inventory(srv)
         print('Sleep for Testing')
-        
+
         sleep(600)
 
         cluster_ver = get_cluster_build(srv)
