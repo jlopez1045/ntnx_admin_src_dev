@@ -16,3 +16,4 @@ proxy_password =
 
 [SETTINGS]
 verify_ssl = False
+logger_file = log.out
