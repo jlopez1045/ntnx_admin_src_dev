@@ -60,7 +60,6 @@ proxy_scheme = config.get('PROXY', 'proxy_scheme')
 proxy_host = config.get('PROXY', 'proxy_host')
 proxy_port = config.get('PROXY', 'proxy_port')
 
-verify_ssl = config.get('SETTINGS', 'verify_ssl')
 logfile = config.get('SETTINGS', 'logger_file')
 
 # ============================================================================================================================================================================================== Utility
@@ -180,7 +179,23 @@ def execute_api(req_type, srv, auth, api_endpoint, payload):
         return 'FAILED'
 
 
+def connect_ntnx_lcm_client(srv):
+
+    config = ntnx_lcm_py_client.configuration.Configuration()
+    config.host = str(srv)
+    config.port = 9440
+    config.verify_ssl = False
+    config.max_retry_attempts = 1
+    config.backoff_factor = 3
+    config.username = str(prism_username)
+    config.password = str(prism_password)
+
+    client = ntnx_lcm_py_client.ApiClient(configuration=config)
+
+    return client
+
 # ================================================================================================================================================================================================ Tasks
+
 
 def run_aos_upgrade(srv, build):
 
@@ -207,22 +222,8 @@ def run_aos_upgrade(srv, build):
 
 def run_lcm_inventory(srv):
 
-    config = ntnx_lcm_py_client.configuration.Configuration()
-    config.host = str(srv)
-    config.port = 9440
-    config.verify_ssl = False
-    config.max_retry_attempts = 1
-    config.backoff_factor = 3
-    config.username = str(prism_username)
-    config.password = str(prism_password)
+    client = connect_ntnx_lcm_client(srv)
 
-    #config.proxy_scheme = str(proxy_scheme)
-    #config.proxy_host = "127.0.0.1"
-    #config.proxy_port = int(proxy_port)
-    #config.proxy_username = ""
-    #config.proxy_password = ""
-
-    client = ntnx_lcm_py_client.ApiClient(configuration=config)
     inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
     api_response = inventoryApi.inventory()
 
@@ -230,28 +231,6 @@ def run_lcm_inventory(srv):
         print('api_response', api_response)
         return 'DONE'
     else:
-        return 'FAILED'
-
-
-def run_lcm_inventory_B(srv):
-
-    try:
-
-        api_endpoint = 'api/lcm/v4.0.a1/operations/$actions/performInventory'
-
-        payload = {}
-
-        json_response = execute_api(req_type='post', srv=srv, auth=prism_auth_header, api_endpoint=api_endpoint, payload=payload)
-
-        if json_response == 'FAILED':
-            return 'FAILED'
-
-        # print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Response', str(json_response))
-
-        return 'DONE'
-
-    except Exception as msg:
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
         return 'FAILED'
 
 
@@ -406,6 +385,21 @@ def check_download_status(srv, build):
 
 
 def check_lcm_task(srv):
+
+    client = connect_ntnx_lcm_client(srv)
+
+    statusApi = ntnx_lcm_py_client.StatusApi(api_client=client)
+    api_response = statusApi.get_status()
+
+    if api_response:
+        print(api_response)
+        return "DONE"
+
+    else:
+        return 'FAILED'
+
+
+def check_lcm_task_b(srv):
 
     try:
 
@@ -697,8 +691,12 @@ def upgrade_loop(srv, build, md5, job_status, logging):
 
         sleep(5)
 
+        check_lcm_task(srv)
+        sleep(10)
+
         run_lcm_inventory(srv)
         print('Sleep for Testing')
+        
         sleep(600)
 
         cluster_ver = get_cluster_build(srv)
