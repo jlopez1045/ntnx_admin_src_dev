@@ -217,6 +217,12 @@ def run_lcm_inventory(srv):
     config.username = str(prism_username)
     config.password = str(prism_password)
 
+    config.proxy_scheme = str(proxy_scheme)
+    config.proxy_host = "127.0.0.1"
+    config.proxy_port = int(proxy_port)
+    config.proxy_username = ""
+    config.proxy_password = ""
+
     client = ntnx_prism_py_client.ApiClient(configuration=config)
 
     inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
