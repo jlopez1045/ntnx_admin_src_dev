@@ -392,6 +392,7 @@ def check_lcm_task(srv):
     api_response = statusApi.get_status()
 
     if api_response:
+        print(type(api_response))
         print(api_response)
 
         print('\n\n\n')
