@@ -812,7 +812,7 @@ if __name__ == "__main__":
                 stream=None,
             )
 
-            prism_encoded_credentials = b64encode(bytes(f"{prism_username}:{prism_username}", encoding="ascii")).decode("ascii")
+            prism_encoded_credentials = b64encode(bytes(f"{prism_username}:{prism_password}", encoding="ascii")).decode("ascii")
             prism_auth_header = f"Basic {prism_encoded_credentials}"
 
             cli_encoded_credentials = b64encode(bytes(f"{cli_username}:{cli_password}", encoding="ascii")).decode("ascii")
