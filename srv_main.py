@@ -210,7 +210,7 @@ def run_lcm_inventory(srv):
     config = ntnx_lcm_py_client.configuration.Configuration()
     config.host = str(srv)
     config.port = 9440
-    config.verify_ssl = bool(verify_ssl)
+    config.verify_ssl = str(verify_ssl)
     config.max_retry_attempts = 1
     config.backoff_factor = 3
     config.username = str(prism_username)
