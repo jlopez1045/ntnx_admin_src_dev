@@ -217,6 +217,8 @@ def run_lcm_inventory(srv):
     config.username = str(prism_username)
     config.password = str(prism_password)
 
+    client.add_default_header(header_name='Accept-Encoding', header_value='gzip, deflate, br')
+
     config.proxy_scheme = str(proxy_scheme)
     config.proxy_host = "127.0.0.1"
     config.proxy_port = int(proxy_port)
