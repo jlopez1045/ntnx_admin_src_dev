@@ -3,6 +3,7 @@ import os
 import sys
 import getopt
 
+import ntnx_prism_py_client
 import psutil
 import urllib3
 import json
@@ -16,6 +17,7 @@ from pexpect import pxssh
 from pathlib import Path
 from packaging.version import Version
 import inspect
+import ntnx_lcm_py_client
 
 import configparser
 
@@ -63,7 +65,7 @@ proxy_port = config.get('PROXY', 'proxy_port')
 verify_ssl = config.get('SETTINGS', 'verify_ssl')
 logfile = config.get('SETTINGS', 'logger_file')
 
-# ============================================================================================================================================================================================== Nutanix
+# ============================================================================================================================================================================================== Utility
 
 
 def convert_time(task_time_microseconds):
@@ -102,6 +104,9 @@ def check_ping(address):
 
     except:
         return False
+
+
+# ============================================================================================================================================================================================== Connect
 
 
 def connect_ssh(srv, cmd, username, password):  # Uses PE User and Pass
@@ -177,6 +182,8 @@ def execute_api(req_type, srv, auth, api_endpoint, payload):
         return 'FAILED'
 
 
+# ================================================================================================================================================================================================ Tasks
+
 def run_aos_upgrade(srv, build):
 
     try:
@@ -198,6 +205,170 @@ def run_aos_upgrade(srv, build):
     except Exception as msg:
         print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
         return 'FAILED'
+
+
+def run_lcm_inventory(srv):
+
+    config = ntnx_lcm_py_client.configuration.Configuration()
+    config.host = str(srv)
+    config.port = 9440
+    config.max_retry_attempts = 1
+    config.backoff_factor = 3
+    config.username = str(prism_username)
+    config.password = str(prism_password)
+
+    client = ntnx_prism_py_client.ApiClient(configuration=config)
+
+    inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
+    api_response = inventoryApi.inventory()
+
+    if api_response:
+        print('api_response', api_response)
+        return 'DONE'
+    else:
+        return 'FAILED'
+
+
+def run_lcm_inventory_B(srv):
+
+    try:
+
+        api_endpoint = 'api/lcm/v4.0.a1/operations/$actions/performInventory'
+
+        payload = {}
+
+        json_response = execute_api(req_type='post', srv=srv, auth=prism_auth_header, api_endpoint=api_endpoint, payload=payload)
+
+        if json_response == 'FAILED':
+            return 'FAILED'
+
+        # print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Response', str(json_response))
+
+        return 'DONE'
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        return 'FAILED'
+
+
+def download_aos(srv, build):
+
+    try:
+        # build = '6.5.5.1'
+
+        cmd = 'ncli software download name=' + str(build) + ' software-type=NOS'
+        status = connect_ssh(srv, cmd, cli_username, cli_password)
+
+        return status
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        return 'FAILED'
+
+
+# ======================================================================================================================================================================================== Healing Tasks
+
+
+def clean_home_drive(srv):
+
+    try:
+        cmd0 = 'find /home/log/journal/ -maxdepth 1 -mindepth 1 -type d -not -name $(cat /etc/machine-id) -exec rm ' + "'{}'" + ' +'
+        cmd1 = 'find ~/data/prism -name ' + "'api_audit*'" + ' -mmin +4320 -type f -exec /usr/bin/rm ' + "'{}'" + ' +'
+        cmd2 = 'find ~/data/prism/clickstream -name ' + "'client_tracking*'" + ' -mmin +4320 -type f -exec /usr/bin/rm ' + "'{}'" + ' +'
+        cmd3 = 'find ~/data/prism/clickstream -name ' + "'external_client*'" + ' -mmin +4320 -type f -exec /usr/bin/rm ' + "'{}'" + ' +'
+
+        cvm_ips = get_cmv_ips(srv)
+
+        for x in cvm_ips:
+            status = connect_ssh(str(x), cmd0, cli_username, cli_password)
+            sleep(10)
+            status = connect_ssh(str(x), cmd1, cli_username, cli_password)
+            sleep(10)
+            status = connect_ssh(str(x), cmd2, cli_username, cli_password)
+            sleep(10)
+            status = connect_ssh(str(x), cmd3, cli_username, cli_password)
+            sleep(10)
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        return 'FAILED'
+
+
+def cleanup_lcm(srv):
+
+    try:
+        cmd = 'python /home/nutanix/cluster/bin/lcm/lcm_task_cleanup.py'
+        status = connect_ssh(srv, cmd, cli_username, cli_password)
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        return 'FAILED'
+
+
+def clear_memory(srv):
+
+    try:
+        cmd0 = 'pkill -f /home/nutanix/bin/vip_monitor'
+        cmd1 = 'genesis stop lazan anduril flow catalog cluster_config delphi && cluster start && sleep 30'
+
+        cvm_ips = get_cmv_ips(srv)
+
+        for x in cvm_ips:
+            status = connect_ssh(str(x).strip(), cmd0, cli_username, cli_password)
+            sleep(10)
+            status = connect_ssh(str(x).strip(), cmd1, cli_username, cli_password)
+            sleep(10)
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        return 'FAILED'
+
+
+def reset_genesis(srv):
+
+    try:
+        cmd = 'genesis restart && genesis stop prism && cluster start'
+        status = connect_ssh(srv, cmd, cli_username, cli_password)
+
+        sleep(300)
+
+        cvm_ips = get_cmv_ips(srv)  # Get all CVM IPs
+
+        for x in cvm_ips:
+            status = connect_ssh(str(x).strip(), cmd, cli_username, cli_password)
+            sleep(300)
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        return 'FAILED'
+
+
+def rolling_reboot_cvm(srv):
+
+    try:
+        cmd = 'echo Y | rolling_restart'
+
+        cvm_ips = get_cmv_ips(srv)  # Get all CVM IPs
+        num_cvms = len(cvm_ips)
+
+        sleep_time = num_cvms * 300
+
+        status = connect_ssh(srv, cmd, cli_username, cli_password)
+
+        sleep(sleep_time)
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        return 'FAILED'
+
+
+# =============================================================================================================================================================================================== Checks
+
+
+def check_all_versions(srv):
+
+    print('AOS')
+    print('LCM')
 
 
 def check_download_status(srv, build):
@@ -227,6 +398,63 @@ def check_download_status(srv, build):
     except Exception as msg:
         print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
         job_status[str(srv)] = 'FAILED: ' + str(inspect.currentframe().f_code.co_name) + str(msg)
+        return 'FAILED'
+
+
+def check_lcm_task(srv):
+
+    try:
+
+        api_endpoint = 'PrismGateway/services/rest/v2.0/tasks/list'
+
+        payload = {}
+
+        json_response = execute_api(req_type='post', srv=srv, auth=prism_auth_header, api_endpoint=api_endpoint, payload=payload)
+
+        # print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Response', str(json_response))
+
+        if json_response == 'FAILED':
+            return 'FAILED'
+
+        entities_list = json_response['entities']
+
+        if len(entities_list) == 0:
+            return 'MISSING'
+
+        task_names = ['kLcmRootTask']
+
+        found_matching_task = False
+
+        for task in task_names:
+
+            for x in entities_list:
+
+                task_created_time = x['create_time_usecs']
+                age_in_hours = convert_time(task_created_time)
+
+                if age_in_hours < 48:
+
+                    if str(x['operation_type']).lower() == task:
+
+                        found_matching_task = True
+
+                        percentage = x['percentage_complete']
+                        progress = x['progress_status']
+
+                        if str(progress).upper() == 'SUCCEEDED':
+
+                            return 'DONE'
+
+                        elif str(progress).upper() == 'RUNNING':
+
+                            return 'RUNNING: LCM Inventory: ' + str(percentage) + ' %'
+
+                        elif str(progress).upper() == 'FAILED':
+
+                            return 'ERROR'
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
         return 'FAILED'
 
 
@@ -323,6 +551,8 @@ def check_upgrade_task(srv):
         return 'FAILED'
 
 
+# ============================================================================================================================================================================================= Get Info
+
 def get_cluster_info(srv):
 
     try:
@@ -403,112 +633,7 @@ def get_cluster_build(srv):
         return 'FAILED'
 
 
-def download_aos(srv, build):
-
-    try:
-        # build = '6.5.5.1'
-
-        cmd = 'ncli software download name=' + str(build) + ' software-type=NOS'
-        status = connect_ssh(srv, cmd, cli_username, cli_password)
-
-        return status
-
-    except Exception as msg:
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
-        return 'FAILED'
-
-
-def cleanup_lcm(srv):
-
-    try:
-        cmd = 'python /home/nutanix/cluster/bin/lcm/lcm_task_cleanup.py'
-        status = connect_ssh(srv, cmd, cli_username, cli_password)
-
-    except Exception as msg:
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
-        return 'FAILED'
-
-
-def clear_memory(srv):
-
-    try:
-        cmd0 = 'pkill -f /home/nutanix/bin/vip_monitor'
-        cmd1 = 'genesis stop lazan anduril flow catalog cluster_config delphi && cluster start && sleep 30'
-
-        cvm_ips = get_cmv_ips(srv)
-
-        for x in cvm_ips:
-            status = connect_ssh(str(x).strip(), cmd0, cli_username, cli_password)
-            sleep(10)
-            status = connect_ssh(str(x).strip(), cmd1, cli_username, cli_password)
-            sleep(10)
-
-    except Exception as msg:
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
-        return 'FAILED'
-
-
-def clean_home_drive(srv):
-
-    try:
-        cmd0 = 'find /home/log/journal/ -maxdepth 1 -mindepth 1 -type d -not -name $(cat /etc/machine-id) -exec rm ' + "'{}'" + ' +'
-        cmd1 = 'find ~/data/prism -name ' + "'api_audit*'" + ' -mmin +4320 -type f -exec /usr/bin/rm ' + "'{}'" + ' +'
-        cmd2 = 'find ~/data/prism/clickstream -name ' + "'client_tracking*'" + ' -mmin +4320 -type f -exec /usr/bin/rm ' + "'{}'" + ' +'
-        cmd3 = 'find ~/data/prism/clickstream -name ' + "'external_client*'" + ' -mmin +4320 -type f -exec /usr/bin/rm ' + "'{}'" + ' +'
-
-        cvm_ips = get_cmv_ips(srv)
-
-        for x in cvm_ips:
-            status = connect_ssh(str(x), cmd0, cli_username, cli_password)
-            sleep(10)
-            status = connect_ssh(str(x), cmd1, cli_username, cli_password)
-            sleep(10)
-            status = connect_ssh(str(x), cmd2, cli_username, cli_password)
-            sleep(10)
-            status = connect_ssh(str(x), cmd3, cli_username, cli_password)
-            sleep(10)
-
-    except Exception as msg:
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
-        return 'FAILED'
-
-
-def reset_genesis(srv):
-
-    try:
-        cmd = 'genesis restart && genesis stop prism && cluster start'
-        status = connect_ssh(srv, cmd, cli_username, cli_password)
-
-        sleep(300)
-
-        cvm_ips = get_cmv_ips(srv)  # Get all CVM IPs
-
-        for x in cvm_ips:
-            status = connect_ssh(str(x).strip(), cmd, cli_username, cli_password)
-            sleep(300)
-
-    except Exception as msg:
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
-        return 'FAILED'
-
-
-def rolling_reboot_cvm(srv):
-
-    try:
-        cmd = 'echo Y | rolling_restart'
-
-        cvm_ips = get_cmv_ips(srv)  # Get all CVM IPs
-        num_cvms = len(cvm_ips)
-
-        sleep_time = num_cvms * 300
-
-        status = connect_ssh(srv, cmd, cli_username, cli_password)
-
-        sleep(sleep_time)
-
-    except Exception as msg:
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
-        return 'FAILED'
+# ========================================================================================================================================================================================= Active Loops
 
 
 def record_status(job_status, logging):
@@ -568,6 +693,10 @@ def upgrade_loop(srv, build, md5, job_status, logging):
 
         sleep(5)
 
+        run_lcm_inventory(srv)
+        print('Sleep for Testing')
+        sleep(600)
+
         cluster_ver = get_cluster_build(srv)
 
         if cluster_ver == 'FAILED':
@@ -581,6 +710,11 @@ def upgrade_loop(srv, build, md5, job_status, logging):
             logging.critical(str(srv) + ' ' + str(note))
             job_status[str(srv)] = str(note)
             return
+
+        elif Version(cluster_ver) > Version('6.5.1'):
+            note = 'Current: ' + str(cluster_ver) + ' Upgrade Needed'
+            logging.critical(str(srv) + ' ' + str(note))
+            run_lcm_inventory(srv)
 
         while True:
 

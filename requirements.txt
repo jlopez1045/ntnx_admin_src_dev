@@ -1,3 +1,4 @@
 pexpect
 packaging
 psutil
+ntnx_lcm_py_client
