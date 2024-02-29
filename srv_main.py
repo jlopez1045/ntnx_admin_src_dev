@@ -392,13 +392,15 @@ def check_lcm_task(srv):
     api_response = statusApi.get_status()
 
     if api_response:
-        # print(api_response)
+        print(api_response)
 
+        print('\n\n\n')
+        
         data = api_response['data']
         print(data)
 
         print('\n\n\n')
-        
+
         running = data['inProgressOperations']
         print(running)
 
