@@ -217,8 +217,6 @@ def run_lcm_inventory(srv):
     config.username = str(prism_username)
     config.password = str(prism_password)
 
-    client.add_default_header(header_name='Accept-Encoding', header_value='gzip, deflate, br')
-
     config.proxy_scheme = str(proxy_scheme)
     config.proxy_host = "127.0.0.1"
     config.proxy_port = int(proxy_port)
@@ -226,6 +224,8 @@ def run_lcm_inventory(srv):
     config.proxy_password = ""
 
     client = ntnx_prism_py_client.ApiClient(configuration=config)
+
+    client.add_default_header(header_name='Accept-Encoding', header_value='gzip, deflate, br')
 
     inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
     api_response = inventoryApi.inventory()
