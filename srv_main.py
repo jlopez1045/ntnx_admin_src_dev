@@ -400,7 +400,7 @@ def check_lcm_task(srv):
             print(k)
 
         print('\n\n\n')
-        
+
 
         data = api_response['data']
         print(data)
