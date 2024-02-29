@@ -391,11 +391,13 @@ def check_lcm_task(srv):
     statusApi = ntnx_lcm_py_client.StatusApi(api_client=client)
     api_response = statusApi.get_status()
 
+    api_response = json.loads(api_response)
+
     if api_response:
         print(api_response)
 
         print('\n\n\n')
-        
+
         data = api_response['data']
         print(data)
 
