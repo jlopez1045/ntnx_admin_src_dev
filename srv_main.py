@@ -395,7 +395,13 @@ def check_lcm_task(srv):
         # print(api_response)
 
         data = api_response['data']
+        print(data)
+
+        print('\n\n\n')
+        
         running = data['inProgressOperations']
+        print(running)
+
         for x in running:
             print(x)
 
