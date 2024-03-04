@@ -228,7 +228,7 @@ def run_lcm_inventory(srv):
     api_response = inventoryApi.inventory()
 
     if api_response:
-        print('api_response', api_response)
+        # print('run_lcm_inventory', api_response)
         return 'DONE'
     else:
         return 'FAILED'
@@ -394,11 +394,11 @@ def check_lcm_task(srv):
     if api_response:
 
         data = api_response['_GetLcmStatusApiResponse__data']
-        print(data['inProgressOperation'])
+        # print('check_lcm_task', data['inProgressOperation'])
 
         var = str(data['inProgressOperation'].get('type')).upper()
-        if var == 'INVENTORY':
-            return 'RUNNING INVENTORY'
+        if var:
+            return str(var).upper()
         else:
             return 'NONE'
 
@@ -659,11 +659,16 @@ def upgrade_loop(srv, build, md5, job_status, logging):
                 job_status[srv] = str(note)
                 return
 
-            elif 'RUNNING' in status:
-                sleep(60)
-
             elif status == 'NONE':
                 break
+
+            else:
+                note = 'RUNNING: LCM ' + str(status)
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+                sleep(60)
+
+
 
         print('Sleep for Testing')
 
