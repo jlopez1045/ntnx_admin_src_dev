@@ -398,11 +398,9 @@ def check_lcm_task(srv):
 
         var = str(data['inProgressOperation'].get('type')).upper()
         if var == 'INVENTORY':
-            print('Running Inventory')
+            return 'RUNNING INVENTORY'
         else:
-            print('NOT RUNNING')
-
-        return "DONE"
+            return 'NONE'
 
     else:
         return 'FAILED'
@@ -643,10 +641,30 @@ def upgrade_loop(srv, build, md5, job_status, logging):
 
         sleep(5)
 
-        check_lcm_task(srv)
-        sleep(600)
+        status = run_lcm_inventory(srv)
+        if status == 'FAILED':
+            note = 'FAILED: LCM Inventory'
+            logging.critical(str(srv) + ' ' + str(note))
+            job_status[srv] = str(note)
+            return
 
-        run_lcm_inventory(srv)
+        sleep(15)
+
+        while True:
+
+            status = check_lcm_task(srv)
+            if status == 'FAILED':
+                note = 'FAILED: LCM Task Check'
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+                return
+
+            elif 'RUNNING' in status:
+                sleep(60)
+
+            elif status == 'NONE':
+                break
+
         print('Sleep for Testing')
 
         sleep(600)
