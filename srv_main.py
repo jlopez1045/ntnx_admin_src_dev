@@ -402,7 +402,6 @@ def check_lcm_task(srv):
 
         print('\n\n\n')
 
-
         data = api_response['data']
         print(data)
 
@@ -713,7 +712,7 @@ def upgrade_loop(srv, build, md5, job_status, logging):
         sleep(5)
 
         check_lcm_task(srv)
-        sleep(10)
+        sleep(600   )
 
         run_lcm_inventory(srv)
         print('Sleep for Testing')
