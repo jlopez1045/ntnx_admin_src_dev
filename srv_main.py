@@ -391,20 +391,18 @@ def check_lcm_task(srv):
     statusApi = ntnx_lcm_py_client.StatusApi(api_client=client)
     api_response = vars(statusApi.get_status())
 
-
-
     if api_response:
-        print(type(api_response))
-        print(api_response)
+        #print(type(api_response))
+        #print(api_response)
 
-        print('\n\n\n')
+        #print('\n\n\n')
 
-        for k, v in api_response.items():
-            print(k)
+        #for k, v in api_response.items():
+        #    print(k)
 
-        print('\n\n\n')
+        #print('\n\n\n')
 
-        data = api_response['data']
+        data = api_response['_GetLcmStatusApiResponse__data']
         print(data)
 
         print('\n\n\n')
