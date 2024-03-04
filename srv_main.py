@@ -712,7 +712,7 @@ def upgrade_loop(srv, build, md5, job_status, logging):
         sleep(5)
 
         check_lcm_task(srv)
-        sleep(600   )
+        sleep(600)
 
         run_lcm_inventory(srv)
         print('Sleep for Testing')
