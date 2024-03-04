@@ -403,6 +403,9 @@ def check_lcm_task(srv):
         #print('\n\n\n')
 
         data = api_response['_GetLcmStatusApiResponse__data']
+        print(data['inProgressOperation'])
+
+        
         if data['inProgressOperation']['type'] == 'Inventory':
             print('Running Inventroy')
         else:
