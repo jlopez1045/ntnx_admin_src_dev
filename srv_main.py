@@ -808,47 +808,14 @@ def upgrade_loop(srv, build, job_status, logging):
             note = 'Current: ' + str(cluster_ver) + ' Upgrade Needed'
             logging.critical(str(srv) + ' ' + str(note))
 
-            status = check_lcm_task(srv)
-            if status == 'FAILED':
-                note = 'FAILED: LCM Task Check'
-                logging.critical(str(srv) + ' ' + str(note))
-                job_status[srv] = str(note)
-                return
-
-            elif status == 'NONE':
-                status = run_lcm_inventory(srv)
-                if status == 'FAILED':
-                    note = 'FAILED: LCM Inventory'
-                    logging.critical(str(srv) + ' ' + str(note))
-                    job_status[srv] = str(note)
-                    return
-
-            sleep(15)
-
-            while True:
-
-                status = check_lcm_task(srv)
-                if status == 'FAILED':
-                    note = 'FAILED: LCM Task Check'
-                    logging.critical(str(srv) + ' ' + str(note))
-                    job_status[srv] = str(note)
-                    return
-
-                elif status == 'NONE':
-                    break
-
-                else:
-                    note = 'RUNNING: LCM ' + str(status)
-                    logging.critical(str(srv) + ' ' + str(note))
-                    job_status[srv] = str(note)
-                    sleep(60)
-
-            job_lcm_path = True
+            job_lcm_inventory = False
+            job_lcm_upgrade = True
             job_download = False
             job_upgrade = False
 
         else:  # below version AOS 6.5.0
-            job_lcm_path = False
+            job_lcm_inventory = False
+            job_lcm_upgrade = False
             job_download = True
             job_upgrade = True
 
@@ -870,9 +837,48 @@ def upgrade_loop(srv, build, job_status, logging):
                 job_upgrade = False
             '''
 
-            if job_lcm_path:
-                run_lcm_upgrade(srv)
-                sleep(60)
+            if job_lcm_inventory or job_lcm_upgrade:
+
+                if job_lcm_inventory:
+                    status = check_lcm_task(srv)
+                    if status == 'FAILED':
+                        note = 'FAILED: LCM Task Check'
+                        logging.critical(str(srv) + ' ' + str(note))
+                        job_status[srv] = str(note)
+                        return
+
+                    elif status == 'NONE':
+                        status = run_lcm_inventory(srv)
+                        if status == 'FAILED':
+                            note = 'FAILED: LCM Inventory'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            return
+
+                    sleep(15)
+
+                    while True:
+
+                        status = check_lcm_task(srv)
+                        if status == 'FAILED':
+                            note = 'FAILED: LCM Task Check'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            return
+
+                        elif status == 'NONE':
+                            break
+
+                        else:
+                            note = 'RUNNING: LCM ' + str(status)
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            sleep(60)
+
+                if job_lcm_upgrade:
+                    run_lcm_upgrade(srv)
+
+                sleep(10)
                 print('=============================== ENDING', str(srv))
                 return
 
