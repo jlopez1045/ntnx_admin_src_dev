@@ -322,8 +322,9 @@ def run_lcm_upgrade(srv):
                     # runs update
                     update = lcm_instance.update(async_req=False, body=update_spec)
                     print('update', str(update.data))
+                    update_task_ext_id = update.data["extId"]
 
-                    status = check_lcm_task(srv)
+                    status = check_task_uuid(srv, update_task_ext_id)
                     print('check_lcm_task', status)
 
                     note = f"LCM: Update duration: {duration}."
@@ -521,6 +522,26 @@ def check_lcm_task(srv):
             return 'NONE'
 
     else:
+        return 'FAILED'
+
+
+def check_task_uuid(srv, uuid):
+
+    try:
+
+        api_endpoint = 'PrismGateway/services/rest/v2.0/tasks/' + str(uuid)
+
+        payload = {}
+
+        json_response = execute_api(req_type='get', srv=srv, auth=prism_auth_header, api_endpoint=api_endpoint, payload=payload)
+
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Response', str(json_response))
+
+        if json_response == 'FAILED':
+            return 'FAILED'
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
         return 'FAILED'
 
 
