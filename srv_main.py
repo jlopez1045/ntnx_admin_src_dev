@@ -324,6 +324,8 @@ def run_lcm_upgrade(srv):
                     print('update', str(update.data))
                     update_task_ext_id = update.data["extId"]
 
+                    sleep(15)
+                    
                     status = check_task_uuid(srv, update_task_ext_id)
                     print('check_lcm_task', status)
 
