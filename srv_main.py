@@ -304,9 +304,6 @@ def run_lcm_upgrade(srv):
                 entity_update_specs.entity_update_specs.append(spec)
 
             if len(entity_update_specs.entity_update_specs) > 0:
-                notifications = lcm_instance.gen_upgrade_notifications(async_req=False, body=entity_update_specs)
-                print(f"{len(notifications.data.upgrade_plan)} upgrade notifications generated:")
-                print(notifications.data.upgrade_plan)
 
                 # Running Update
 
@@ -318,7 +315,7 @@ def run_lcm_upgrade(srv):
 
                     update_spec = UpdateSpec()
                     # configure the update properties, timing etc
-                    update_spec.entity_update_specs = (entity_update_specs.entity_update_specs)
+                    update_spec.entity_update_specs = entity_update_specs.entity_update_specs
 
                     # skip the pinned VM prechecks
                     # WARNING: consider the implications of doing this in production
