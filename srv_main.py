@@ -324,7 +324,8 @@ def run_lcm_upgrade(srv):
 
                     # runs update
                     update = lcm_instance.update(async_req=False, body=update_spec)
-
+                    print('update', str(update))
+                    
                     # ===== Monitor =====
                     task_ext_id = update.data.ext_id
                     task_name = 'Update'
