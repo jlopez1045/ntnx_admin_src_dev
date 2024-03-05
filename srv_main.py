@@ -275,7 +275,10 @@ def run_lcm_upgrade(srv):
         entities = ntnx_lcm_py_client.api.EntityApi(api_client=client).get_entities(async_req=False)
         # print('entities', str(entities.data))
         for x in entities.data:
-            print(x.uuid)
+            if x.uuid:
+                print(x.uuid)
+            else:
+                print('missing uuid')
 
 
         # get LCM Recommendations
