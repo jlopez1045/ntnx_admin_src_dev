@@ -564,6 +564,76 @@ def check_task_uuid(srv, uuid):
         return 'FAILED'
 
 
+def check_lcm_upgrade_task(srv):
+    try:
+
+        api_endpoint = 'PrismGateway/services/rest/v2.0/tasks/list'
+
+        payload = {}
+
+        json_response = execute_api(req_type='post', srv=srv, auth=prism_auth_header, api_endpoint=api_endpoint, payload=payload)
+
+        # print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Response', str(json_response))
+
+        if json_response == 'FAILED':
+            return 'FAILED'
+
+        entities_list = json_response['entities']
+        # entities_list.sort(lambda x: x['start_time_usecs'])
+
+        if len(entities_list) == 0:
+            return 'MISSING'
+
+        task_names = ['klcmroottask']
+
+        found_matching_task = False
+        pass_upgrade = False
+
+        for task in task_names:
+
+            for x in reversed(entities_list):
+
+                task_created_time = x['create_time_usecs']
+                age_in_hours = convert_time(task_created_time)
+
+                if age_in_hours < 24:
+
+                    if str(x['operation_type']).lower() == task:
+
+                        found_matching_task = True
+
+                        percentage = x['percentage_complete']
+                        progress = x['progress_status']
+
+                        if str(progress).upper() == 'SUCCEEDED':
+
+                            return 'DONE'
+
+                        elif str(progress).upper() == 'RUNNING':
+
+                            return 'RUNNING: Upgrade Task Percentage: ' + str(percentage) + ' %'
+
+                        elif str(progress).upper() == 'FAILED':
+                            task = "FAILED: Upgrade Task"
+
+                            pass_upgrade = False
+
+        if not pass_upgrade:
+
+            if found_matching_task:
+                task = "FAILED: LCM Upgrade Task"
+            else:
+                task = 'MISSING'
+            return task
+
+        else:
+            return 'ERROR'
+
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        return 'FAILED'
+
+
 def check_upgrade_task(srv):
     try:
 
@@ -875,19 +945,25 @@ def upgrade_loop(srv, build, job_status, logging):
 
                     while True:
 
-                        status = check_lcm_task(srv)
+                        status = check_lcm_upgrade_task(srv)
 
-                        if status == 'FAILED':
-                            note = 'FAILED: LCM Task Check - Quitting'
+                        if 'FAILED' in status:
+                            note = str(status)
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
                             return
 
-                        elif status == 'NONE':
+                        elif status == 'DONE':
+                            note = 'DONE: LCM Updates Completed - Quitting'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            return
+
+                        elif status == 'MISSING':
                             break
 
                         else:
-                            note = 'RUNNING: LCM ' + str(status)
+                            note = str(status)
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
 
@@ -903,8 +979,6 @@ def upgrade_loop(srv, build, job_status, logging):
                             note = 'DONE: LCM Updates Completed - Quitting'
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
-                            sleep(60)
-
                             return
 
                         elif status == 'FAILED':
