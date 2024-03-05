@@ -323,20 +323,8 @@ def run_lcm_upgrade(srv):
                     update = lcm_instance.update(async_req=False, body=update_spec)
                     print('update', str(update.data))
 
-                    # ===== Monitor =====
-                    task_ext_id = update.data['extId']
-                    task_name = 'Update'
-
-                    duration = utils.monitor_task(
-                        task_ext_id=task_ext_id,
-                        task_name=task_name,
-                        pc_ip=utils.prism_config.host,
-                        username=utils.prism_config.username,
-                        password=utils.prism_config.password,
-                        poll_timeout=poll_timeout
-                    )
-                    print(f"Update duration: {duration}.")
-                    # ===== Monitor =====
+                    status = check_lcm_task(srv)
+                    print('check_lcm_task', status)
 
                     note = f"LCM: Update duration: {duration}."
                     logging.critical(str(srv) + ' ' + str(note))
