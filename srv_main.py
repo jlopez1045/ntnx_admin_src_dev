@@ -880,7 +880,7 @@ def upgrade_loop(srv, build, job_status, logging):
             note = 'Current: ' + str(cluster_ver) + ' Upgrade Needed'
             logging.critical(str(srv) + ' ' + str(note))
 
-            job_lcm_inventory = False
+            job_lcm_inventory = True
             job_lcm_upgrade = True
             job_download = False
             job_upgrade = False
