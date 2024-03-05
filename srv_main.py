@@ -72,11 +72,11 @@ proxy_port = config.get('PROXY', 'proxy_port')
 logfile = config.get('SETTINGS', 'logger_file')
 poll_timeout = config.get('SETTINGS', 'poll_timeout')
 
+
 # ============================================================================================================================================================================================== Utility
 
 
 def convert_time(task_time_microseconds):
-
     task_time_seconds = task_time_microseconds / 1000000
     task_time = datetime.fromtimestamp(task_time_seconds)
 
@@ -138,7 +138,6 @@ def connect_ssh(srv, cmd, username, password):  # Uses PE User and Pass
 
 
 def execute_api(req_type, srv, auth, api_endpoint, payload):
-
     api_url = 'https://' + str(srv).strip() + ':9440/' + api_endpoint
     payload = json.dumps(payload)
     headers = {
@@ -190,7 +189,6 @@ def execute_api(req_type, srv, auth, api_endpoint, payload):
 
 
 def connect_ntnx_lcm_client(srv):
-
     config = ntnx_lcm_py_client.configuration.Configuration()
     config.host = str(srv)
     config.port = 9440
@@ -204,16 +202,17 @@ def connect_ntnx_lcm_client(srv):
 
     return client
 
+
 # ================================================================================================================================================================================================ Tasks
 
 
 def run_aos_upgrade(srv, build):
-
     try:
 
         api_endpoint = 'PrismGateway/services/rest/v1/genesis'
 
-        payload = {'value': '{".oid":"ClusterManager",".method":"cluster_upgrade",".kwargs":{"nos_version":"' + str(build) + '","manual_upgrade":false,"ignore_preupgrade_tests":false,"skip_upgrade":false}}'}  # Upgrade
+        payload = {'value': '{".oid":"ClusterManager",".method":"cluster_upgrade",".kwargs":{"nos_version":"' + str(
+            build) + '","manual_upgrade":false,"ignore_preupgrade_tests":false,"skip_upgrade":false}}'}  # Upgrade
         # payload = {'value': '{".oid":"ClusterManager",".method":"cluster_upgrade",".kwargs":{"nos_version":"' + str(build) + '","manual_upgrade":false,"ignore_preupgrade_tests":false,"skip_upgrade":true}}'}  # Pre-Check Only
 
         json_response = execute_api(req_type='post', srv=srv, auth=prism_auth_header, api_endpoint=api_endpoint, payload=payload)
@@ -231,7 +230,6 @@ def run_aos_upgrade(srv, build):
 
 
 def run_lcm_inventory(srv):
-
     utils = Utils(pc_ip=srv, username=prism_username, password=prism_password)
 
     client = connect_ntnx_lcm_client(srv)
@@ -265,9 +263,7 @@ def run_lcm_inventory(srv):
 
 
 def run_lcm_upgrade(srv):
-
     try:
-        utils = Utils(pc_ip=srv, username=prism_username, password=prism_password)
 
         client = connect_ntnx_lcm_client(srv)
 
@@ -321,7 +317,7 @@ def run_lcm_upgrade(srv):
 
                     # runs update
                     update = lcm_instance.update(async_req=False, body=update_spec)
-                    print('update', str(update.data))
+                    # print('update', str(update.data))
                     update_task_ext_id = update.data["extId"]
 
                     sleep(15)
@@ -379,7 +375,6 @@ def run_lcm_upgrade(srv):
 
 
 def download_aos(srv, build):
-
     try:
         # build = '6.5.5.1'
 
@@ -397,7 +392,6 @@ def download_aos(srv, build):
 
 
 def clean_home_drive(srv):
-
     try:
         cmd0 = 'find /home/log/journal/ -maxdepth 1 -mindepth 1 -type d -not -name $(cat /etc/machine-id) -exec rm ' + "'{}'" + ' +'
         cmd1 = 'find ~/data/prism -name ' + "'api_audit*'" + ' -mmin +4320 -type f -exec /usr/bin/rm ' + "'{}'" + ' +'
@@ -422,7 +416,6 @@ def clean_home_drive(srv):
 
 
 def cleanup_lcm(srv):
-
     try:
         cmd = 'python /home/nutanix/cluster/bin/lcm/lcm_task_cleanup.py'
         status = connect_ssh(srv, cmd, cli_username, cli_password)
@@ -433,7 +426,6 @@ def cleanup_lcm(srv):
 
 
 def clear_memory(srv):
-
     try:
         cmd0 = 'pkill -f /home/nutanix/bin/vip_monitor'
         cmd1 = 'genesis stop lazan anduril flow catalog cluster_config delphi && cluster start && sleep 30'
@@ -452,7 +444,6 @@ def clear_memory(srv):
 
 
 def reset_genesis(srv):
-
     try:
         cmd = 'genesis restart && genesis stop prism && cluster start'
         status = connect_ssh(srv, cmd, cli_username, cli_password)
@@ -471,7 +462,6 @@ def reset_genesis(srv):
 
 
 def rolling_reboot_cvm(srv):
-
     try:
         cmd = 'echo Y | rolling_restart'
 
@@ -493,13 +483,11 @@ def rolling_reboot_cvm(srv):
 
 
 def check_all_versions(srv):
-
     print('AOS')
     print('LCM')
 
 
 def check_download_status(srv, build):
-
     try:
 
         id = '1708078628346'
@@ -529,7 +517,6 @@ def check_download_status(srv, build):
 
 
 def check_lcm_task(srv):
-
     client = connect_ntnx_lcm_client(srv)
 
     statusApi = ntnx_lcm_py_client.StatusApi(api_client=client)
@@ -551,7 +538,6 @@ def check_lcm_task(srv):
 
 
 def check_task_uuid(srv, uuid):
-
     try:
 
         api_endpoint = 'PrismGateway/services/rest/v2.0/tasks/' + str(uuid)
@@ -579,7 +565,6 @@ def check_task_uuid(srv, uuid):
 
 
 def check_upgrade_task(srv):
-
     try:
 
         api_endpoint = 'PrismGateway/services/rest/v2.0/tasks/list'
@@ -594,6 +579,7 @@ def check_upgrade_task(srv):
             return 'FAILED'
 
         entities_list = json_response['entities']
+        # entities_list.sort(lambda x: x['start_time_usecs'])
 
         if len(entities_list) == 0:
             return 'MISSING'
@@ -606,12 +592,12 @@ def check_upgrade_task(srv):
 
         for task in task_names:
 
-            for x in entities_list:
+            for x in reversed(entities_list):
 
                 task_created_time = x['create_time_usecs']
                 age_in_hours = convert_time(task_created_time)
 
-                if age_in_hours < 48:
+                if age_in_hours < 24:
 
                     if str(x['operation_type']).lower() == task:
 
@@ -674,7 +660,6 @@ def check_upgrade_task(srv):
 # ============================================================================================================================================================================================= Get Info
 
 def get_cluster_info(srv):
-
     try:
         api_endpoint = 'api/nutanix/v2.0/cluster/'
 
@@ -700,7 +685,6 @@ def get_cluster_info(srv):
 
 
 def get_cmv_ips(srv):
-
     try:
         api_endpoint = 'PrismGateway/services/rest/v2.0/hosts/'
 
@@ -728,7 +712,6 @@ def get_cmv_ips(srv):
 
 
 def get_cluster_build(srv):
-
     try:
         id = '1708238042442'
         api_endpoint = 'PrismGateway/services/rest/v1/cluster/version?__=' + str(id)
@@ -757,7 +740,6 @@ def get_cluster_build(srv):
 
 
 def record_status(job_status, logging):
-
     sleep(30)
 
     while True:
@@ -774,7 +756,6 @@ def record_status(job_status, logging):
 
 
 def upgrade_loop(srv, build, job_status, logging):
-
     try:
 
         task_rolling_reboot = False
@@ -842,36 +823,23 @@ def upgrade_loop(srv, build, job_status, logging):
 
         while True:
 
-            '''
-            note = 'ACTION: check_upgrade_task'
-            logging.info(str(srv) + ' ' + str(note))
-            job_status[str(srv)] = str(note)
-
-            status = check_upgrade_task(srv)
-
-            if 'RUNNING' in status:
-                job_download = False
-                job_upgrade = True
-                sleep(60)
-            else:
-                job_download = True
-                job_upgrade = False
-            '''
-
             if job_lcm_inventory or job_lcm_upgrade:
 
                 if job_lcm_inventory:
+
                     status = check_lcm_task(srv)
+
                     if status == 'FAILED':
-                        note = 'FAILED: LCM Task Check'
+                        note = 'FAILED: LCM Task Check - Quitting'
                         logging.critical(str(srv) + ' ' + str(note))
                         job_status[srv] = str(note)
                         return
 
                     elif status == 'NONE':
+
                         status = run_lcm_inventory(srv)
                         if status == 'FAILED':
-                            note = 'FAILED: LCM Inventory'
+                            note = 'FAILED: LCM Inventory - Quitting'
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
                             return
@@ -881,8 +849,36 @@ def upgrade_loop(srv, build, job_status, logging):
                     while True:
 
                         status = check_lcm_task(srv)
+
                         if status == 'FAILED':
-                            note = 'FAILED: LCM Task Check'
+                            note = 'FAILED: LCM Task Check - Quitting'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            return
+
+                        elif status == 'INVENTORY':
+                            note = 'RUNNING: LCM ' + str(status)
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            sleep(60)
+                            continue
+
+                        else:
+                            note = 'RUNNING: LCM ' + str(status)
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+
+                            sleep(15)
+                            break
+
+                if job_lcm_upgrade:
+
+                    while True:
+
+                        status = check_lcm_task(srv)
+
+                        if status == 'FAILED':
+                            note = 'FAILED: LCM Task Check - Quitting'
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
                             return
@@ -894,27 +890,58 @@ def upgrade_loop(srv, build, job_status, logging):
                             note = 'RUNNING: LCM ' + str(status)
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
+
+                        sleep(120)
+
+                    sleep(15)
+
+                    while True:
+
+                        status = run_lcm_upgrade(srv)
+
+                        if status == 'DONE':
+                            note = 'DONE: LCM Updates Completed - Quitting'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
                             sleep(60)
 
-                if job_lcm_upgrade:
+                            return
 
-                    status = run_lcm_upgrade(srv)
+                        elif status == 'FAILED':
 
-                    if status == 'DONE':
-                        note = 'DONE: LCM Updates Completed - Quitting'
-                        logging.critical(str(srv) + ' ' + str(note))
-                        job_status[srv] = str(note)
-                        sleep(60)
+                            retry_count_upgrade = retry_count_upgrade + 1
 
-                        return
+                            if retry_count_upgrade > 3:
+                                note = 'FAILED: LCM Updates Failed - Quitting'
+                                logging.critical(str(srv) + ' ' + str(note))
+                                job_status[srv] = str(note)
+                                return
 
-                    elif status == 'FAILED':
-                        note = 'FAILED: LCM Updates Failed - Quitting'
-                        logging.critical(str(srv) + ' ' + str(note))
-                        job_status[srv] = str(note)
-                        sleep(60)
+                            if not task_drive_clean:
+                                note = 'ACTION: clean_home_drive A - Attempt ' + str(retry_count_upgrade)
+                                logging.info(str(srv) + ' ' + str(note))
+                                job_status[str(srv)] = str(note)
 
-                        return
+                                clean_home_drive(srv)
+                                task_drive_clean = True
+
+                                sleep(120)
+                                continue
+
+                            elif not task_lcm_cleanup:
+                                cleanup_lcm(srv)
+
+                                note = 'ACTION: cleanup_lcm B - Attempt ' + str(retry_count_upgrade)
+                                logging.info(str(srv) + ' ' + str(note))
+                                job_status[str(srv)] = str(note)
+
+                                cleanup_lcm(srv)
+                                task_lcm_cleanup = True
+
+                                sleep(120)
+                                continue
+
+                            sleep(120)
 
                 sleep(10)
                 print('=============================== ENDING', str(srv))
@@ -1151,7 +1178,7 @@ if __name__ == "__main__":
             print('ERROR', error)
             sys.exit()
 
-    # =========================================================================================================================================================================== Load Log File Settings
+        # =========================================================================================================================================================================== Load Log File Settings
 
         logging.basicConfig(filename=logfile,
                             filemode='a',
@@ -1159,7 +1186,7 @@ if __name__ == "__main__":
                             datefmt='%H:%M:%S',
                             level=logging.INFO)
 
-    # ======================================================================================================================================================================================= Start Loop
+        # ======================================================================================================================================================================================= Start Loop
 
         print('****************************************************** Start')
 
