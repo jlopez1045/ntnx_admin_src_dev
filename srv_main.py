@@ -744,7 +744,7 @@ def record_status(job_status, logging):
 
         print('******************************************************   STATUS END')
 
-        sleep(300)  # 5 min
+        sleep(120)  # 2 min
 
 
 def upgrade_loop(srv, build, job_status, logging):
