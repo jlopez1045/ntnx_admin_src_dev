@@ -946,9 +946,6 @@ def upgrade_loop(srv, build, job_status, logging):
                     while True:
 
                         status = check_lcm_upgrade_task(srv)
-                        print('status_a', status)
-                        status_b = check_lcm_task(srv)
-                        print('status_b', status_b)
 
                         if 'FAILED' in status:
                             note = str(status)
