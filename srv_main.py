@@ -273,7 +273,7 @@ def run_lcm_upgrade(srv):
 
         # get LCM list of supported entities
         entities = ntnx_lcm_py_client.api.EntityApi(api_client=client).get_entities(async_req=False)
-        print(entities)
+        # print('entities', entities)
 
         # get LCM Recommendations
         lcm_instance = ntnx_lcm_py_client.api.RecommendationsApi(api_client=client)
@@ -282,7 +282,8 @@ def run_lcm_upgrade(srv):
         rec_spec.entity_types = ["software"]
 
         recommendations = lcm_instance.get_recommendations(async_req=False, body=rec_spec)
-
+        print('recommendations', recommendations)
+        
         update_info = []
         for rec in recommendations.data["entityUpdateSpecs"]:
 
