@@ -676,8 +676,6 @@ def upgrade_loop(srv, build, md5, job_status, logging):
                 job_status[srv] = str(note)
                 sleep(60)
 
-
-
         print('Sleep for Testing')
 
         sleep(600)
