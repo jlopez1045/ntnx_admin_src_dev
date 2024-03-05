@@ -19,6 +19,12 @@ from packaging.version import Version
 import inspect
 import ntnx_lcm_py_client
 
+from ntnx_lcm_py_client.Ntnx.lcm.v4.common.PrecheckSpec import PrecheckSpec
+from ntnx_lcm_py_client.Ntnx.lcm.v4.common.EntityUpdateSpec import EntityUpdateSpec
+from ntnx_lcm_py_client.Ntnx.lcm.v4.common.EntityUpdateSpecs import EntityUpdateSpecs
+from ntnx_lcm_py_client.Ntnx.lcm.v4.resources.RecommendationSpec import RecommendationSpec
+from ntnx_lcm_py_client.Ntnx.lcm.v4.common.UpdateSpec import UpdateSpec
+
 import configparser
 
 import multiprocessing
@@ -27,6 +33,8 @@ from multiprocessing import Manager
 from datetime import datetime
 from sys import exit
 from time import sleep
+
+from tme import Utils
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(dir_path)
@@ -222,15 +230,153 @@ def run_aos_upgrade(srv, build):
 
 def run_lcm_inventory(srv):
 
+    utils = Utils(pc_ip=srv, username=prism_username, password=prism_password)
+
     client = connect_ntnx_lcm_client(srv)
 
     inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
     api_response = inventoryApi.inventory()
 
+    # ===== Monitor =====
+    task_ext_id = api_response.data["extId"]
+    task_name = 'Inventory'
+
+    duration = utils.monitor_task(
+        task_ext_id=task_ext_id,
+        task_name=task_name,
+        pc_ip=utils.prism_config.host,
+        username=utils.prism_config.username,
+        password=utils.prism_config.password,
+        poll_timeout=poll_timeout
+    )
+    print(f"Inventory duration: {duration}.")
+    # ===== Monitor =====
+
+    note = f"LCM: Inventory duration: {duration}."
+    logging.critical(str(srv) + ' ' + str(note))
+    job_status[srv] = str(note)
+
     if api_response:
-        # print('run_lcm_inventory', api_response)
         return 'DONE'
     else:
+        return 'FAILED'
+
+
+def run_lcm_upgrade(srv):
+
+    try:
+        utils = Utils(pc_ip=srv, username=prism_username, password=prism_password)
+
+        client = connect_ntnx_lcm_client(srv)
+
+        # get LCM Recommendations
+        lcm_instance = ntnx_lcm_py_client.api.RecommendationsApi(api_client=client)
+
+        rec_spec = RecommendationSpec()
+        rec_spec.entity_types = ["software"]
+
+        recommendations = lcm_instance.get_recommendations(async_req=False, body=rec_spec)
+
+        update_info = []
+        for rec in recommendations.data["entityUpdateSpecs"]:
+
+            entity_matches = [entity for entity in entities.data if entity.uuid == rec["entityUuid"]]
+
+            if len(entity_matches) > 0:
+                update_info.append(
+                    {
+                        "product_name": entity_matches[0].entity_model,
+                        "version": entity_matches[0].version,
+                        "entity_uuid": entity_matches[0].uuid,
+                    }
+                )
+
+        print(f"{len(recommendations.data['entityUpdateSpecs'])} software components can be updated:")
+
+        if not update_info:
+            note = "LCM: No updates available, skipping LCM Update planning."
+            logging.critical(str(srv) + ' ' + str(note))
+            job_status[srv] = str(note)
+
+            return 'DONE'
+
+        else:
+            # generate LCM upgrade notifications
+            lcm_instance = ntnx_lcm_py_client.api.NotificationsApi(api_client=client)
+
+            print("Generating LCM Upgrade Notifications ...")
+            entity_update_specs = EntityUpdateSpecs()
+            entity_update_specs.entity_update_specs = []
+
+            for recommendation in recommendations.data["entityUpdateSpecs"]:
+                spec = EntityUpdateSpec()
+                spec.entity_uuid = recommendation["entityUuid"]
+                spec.version = recommendation["version"]
+                entity_update_specs.entity_update_specs.append(spec)
+
+            if len(entity_update_specs.entity_update_specs) > 0:
+                notifications = lcm_instance.gen_upgrade_notifications(async_req=False, body=entity_update_specs)
+                print(f"{len(notifications.data.upgrade_plan)} upgrade notifications generated:")
+                print(notifications.data.upgrade_plan)
+
+                # Running Update
+
+                install_update = True
+                if install_update:
+
+                    # create instance for LCM update
+                    lcm_instance = ntnx_lcm_py_client.api.UpdateApi(api_client=client)
+
+                    update_spec = UpdateSpec()
+                    # configure the update properties, timing etc
+                    update_spec.entity_update_specs = (entity_update_specs.entity_update_specs)
+
+                    # skip the pinned VM prechecks
+                    # WARNING: consider the implications of doing this in production
+                    update_spec.skipped_precheck_flags = ["powerOffUvms"]  # That skips the pinned VM prechecks
+                    update_spec.wait_in_sec_for_app_up = 60
+
+                    # runs update
+                    update = lcm_instance.update(async_req=False, body=update_spec)
+
+                    # ===== Monitor =====
+                    task_ext_id = update.data.ext_id
+                    task_name = 'Update'
+
+                    duration = utils.monitor_task(
+                        task_ext_id=task_ext_id,
+                        task_name=task_name,
+                        pc_ip=utils.prism_config.host,
+                        username=utils.prism_config.username,
+                        password=utils.prism_config.password,
+                        poll_timeout=poll_timeout
+                    )
+                    print(f"Update duration: {duration}.")
+                    # ===== Monitor =====
+
+                    note = f"LCM: Update duration: {duration}."
+                    logging.critical(str(srv) + ' ' + str(note))
+                    job_status[srv] = str(note)
+
+                else:
+                    note = "LCM: Updates cancelled."
+                    logging.critical(str(srv) + ' ' + str(note))
+                    job_status[srv] = str(note)
+
+                    return 'DONE'
+
+            else:
+                note = f"LCM: No upgrade notifications available."
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+
+                return 'DONE'
+
+    except LCMException as lcm_exception:
+        note = f"LCM: Unable to complete the requested action. Exception details: {lcm_exception}"
+        logging.critical(str(srv) + ' ' + str(note))
+        job_status[srv] = str(note)
+
         return 'FAILED'
 
 
@@ -604,8 +750,9 @@ def record_status(job_status, logging):
 def upgrade_loop(srv, build, md5, job_status, logging):
 
     try:
-        job_download = True
+        job_download = False
         job_upgrade = False
+        job_lcm_path = False
 
         task_rolling_reboot = False
         task_genesis_restart = False
@@ -621,8 +768,7 @@ def upgrade_loop(srv, build, md5, job_status, logging):
             job_status[srv] = 'FAILED: Ping Test - Quitting'
             return
 
-        # Password Check
-
+        # ===== Password Check =====
         status = connect_ssh(srv, "echo 'I am Connected'", cli_username, cli_password)
         if status == 'FAILED':
             note = 'FAILED: Password Check - CLI Account - ' + str(cli_username)
@@ -638,6 +784,7 @@ def upgrade_loop(srv, build, md5, job_status, logging):
             logging.critical(str(srv) + ' ' + str(note))
             job_status[srv] = str(note)
             return
+        # ===== Password Check =====
 
         sleep(5)
 
@@ -676,10 +823,6 @@ def upgrade_loop(srv, build, md5, job_status, logging):
                 job_status[srv] = str(note)
                 sleep(60)
 
-        print('Sleep for Testing')
-
-        sleep(600)
-
         cluster_ver = get_cluster_build(srv)
 
         if cluster_ver == 'FAILED':
@@ -694,10 +837,18 @@ def upgrade_loop(srv, build, md5, job_status, logging):
             job_status[str(srv)] = str(note)
             return
 
-        elif Version(cluster_ver) > Version('6.5.1'):
+        elif Version(cluster_ver) > Version('6.5.0'):  # If above ver 6.5.0
             note = 'Current: ' + str(cluster_ver) + ' Upgrade Needed'
             logging.critical(str(srv) + ' ' + str(note))
-            run_lcm_inventory(srv)
+
+            job_lcm_path = True
+            job_download = False
+            job_upgrade = False
+
+        else:  # below version AOS 6.5.0
+            job_lcm_path = False
+            job_download = True
+            job_upgrade = True
 
         while True:
 
@@ -707,12 +858,23 @@ def upgrade_loop(srv, build, md5, job_status, logging):
 
             status = check_upgrade_task(srv)
 
+            '''
             if 'RUNNING' in status:
                 job_download = False
                 job_upgrade = True
                 sleep(60)
+            else:
+                job_download = True
+                job_upgrade = False
+            '''
 
-            if job_download:
+            if job_lcm_path:
+                run_lcm_upgrade(srv)
+                sleep(60)
+                print('=============================== ENDING', str(srv))
+                return
+
+            elif job_download:
 
                 note = 'ACTION: check_download_status'
                 logging.info(str(srv) + ' ' + str(note))
@@ -784,6 +946,8 @@ def upgrade_loop(srv, build, md5, job_status, logging):
 
                     job_download = False
                     job_upgrade = True
+
+                    continue
 
             elif job_upgrade:
 
