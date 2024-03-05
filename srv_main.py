@@ -327,7 +327,7 @@ def run_lcm_upgrade(srv):
                     # print('update', str(update))
 
                     # ===== Monitor =====
-                    task_ext_id = update.data.extId
+                    task_ext_id = update.data['extId']
                     task_name = 'Update'
 
                     duration = utils.monitor_task(
