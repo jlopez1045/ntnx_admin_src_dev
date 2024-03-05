@@ -641,12 +641,20 @@ def upgrade_loop(srv, build, md5, job_status, logging):
 
         sleep(5)
 
-        status = run_lcm_inventory(srv)
+        status = check_lcm_task(srv)
         if status == 'FAILED':
-            note = 'FAILED: LCM Inventory'
+            note = 'FAILED: LCM Task Check'
             logging.critical(str(srv) + ' ' + str(note))
             job_status[srv] = str(note)
             return
+
+        elif status == 'NONE':
+            status = run_lcm_inventory(srv)
+            if status == 'FAILED':
+                note = 'FAILED: LCM Inventory'
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+                return
 
         sleep(15)
 
