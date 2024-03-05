@@ -611,17 +611,17 @@ def check_lcm_upgrade_task(srv):
 
                         elif str(progress).upper() == 'RUNNING':
 
-                            return 'RUNNING: Upgrade Task Percentage: ' + str(percentage) + ' %'
+                            return 'RUNNING: LCM Task Percentage: ' + str(percentage) + ' %'
 
                         elif str(progress).upper() == 'FAILED':
-                            task = "FAILED: Upgrade Task"
+                            task = "FAILED: LCM Task"
 
                             pass_upgrade = False
 
         if not pass_upgrade:
 
             if found_matching_task:
-                task = "FAILED: LCM Upgrade Task"
+                task = "FAILED: LCM Task"
             else:
                 task = 'MISSING'
             return task
@@ -974,6 +974,9 @@ def upgrade_loop(srv, build, job_status, logging):
                     while True:
 
                         status = run_lcm_upgrade(srv)
+                        print('status_a', status)
+                        status_b = check_lcm_task(srv)
+                        print('status_b', status_b)
 
                         if status == 'DONE':
                             note = 'DONE: LCM Updates Completed - Quitting'
