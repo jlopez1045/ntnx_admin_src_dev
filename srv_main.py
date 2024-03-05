@@ -62,7 +62,6 @@ cli_username = config.get('USER', 'cli_username')
 domain_suffix = config.get('USER', 'domain_suffix')
 
 aos_build = config.get('UPGRADE', 'aos_build')
-aos_md5 = config.get('UPGRADE', 'aos_md5')
 
 proxy_scheme = config.get('PROXY', 'proxy_scheme')
 proxy_host = config.get('PROXY', 'proxy_host')
@@ -747,7 +746,7 @@ def record_status(job_status, logging):
         sleep(300)  # 5 min
 
 
-def upgrade_loop(srv, build, md5, job_status, logging):
+def upgrade_loop(srv, build, job_status, logging):
 
     try:
         job_download = False
@@ -1140,7 +1139,7 @@ if __name__ == "__main__":
             job_status[str(x)] = 'Starting'
 
             if len(x) > 1:
-                process = multiprocessing.Process(target=upgrade_loop, args=(x, aos_build, aos_md5, job_status, logging))
+                process = multiprocessing.Process(target=upgrade_loop, args=(x, aos_build, job_status, logging))
                 jobs.append(process)
 
         for j in jobs:

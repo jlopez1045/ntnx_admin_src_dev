@@ -4,8 +4,7 @@ cli_username = nutanix
 domain_suffix = statestr.com
 
 [UPGRADE]
-aos_build = 6.5.5.1
-aos_md5 = 1b4c861d823e282d86059a3ead3eb1ab
+aos_build = 6.5.5.5
 
 [PROXY]
 proxy_scheme = https
