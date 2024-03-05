@@ -271,16 +271,6 @@ def run_lcm_upgrade(srv):
 
         client = connect_ntnx_lcm_client(srv)
 
-        # get LCM list of supported entities
-        entities = ntnx_lcm_py_client.api.EntityApi(api_client=client).get_entities(async_req=False)
-        # print('entities', str(entities.data))
-        for x in entities.data:
-            if x.uuid:
-                print(x.uuid)
-            else:
-                print('missing uuid')
-
-
         # get LCM Recommendations
         lcm_instance = ntnx_lcm_py_client.api.RecommendationsApi(api_client=client)
 
@@ -290,24 +280,9 @@ def run_lcm_upgrade(srv):
         recommendations = lcm_instance.get_recommendations(async_req=False, body=rec_spec)
         # print('recommendations', recommendations)
 
-        update_info = []
-        for rec in recommendations.data["entityUpdateSpecs"]:
-
-            entity_matches = [entity for entity in entities.data if entity.uuid == rec["entityUuid"]]
-            print('entity_matches', entity_matches)
-
-            if len(entity_matches) > 0:
-                update_info.append(
-                    {
-                        "product_name": entity_matches[0].entity_model,
-                        "version": entity_matches[0].version,
-                        "entity_uuid": entity_matches[0].uuid,
-                    }
-                )
-
         print(f"{len(recommendations.data['entityUpdateSpecs'])} software components can be updated:")
 
-        if not update_info:
+        if not recommendations.data['entityUpdateSpecs']:
             note = "LCM: No updates available, skipping LCM Update planning."
             logging.critical(str(srv) + ' ' + str(note))
             job_status[srv] = str(note)
