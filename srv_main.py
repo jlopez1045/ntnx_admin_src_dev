@@ -335,14 +335,14 @@ def run_lcm_upgrade(srv):
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
 
-                            return
+                            return 'FAILED'
 
                         elif status == 'DONE':
                             note = "RUNNING: LCM Update Completed"
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
 
-                            break
+                            return 'DONE'
 
                         elif status == 'RUNNING':
                             note = "RUNNING: LCM Update"
@@ -897,7 +897,24 @@ def upgrade_loop(srv, build, job_status, logging):
                             sleep(60)
 
                 if job_lcm_upgrade:
-                    run_lcm_upgrade(srv)
+
+                    status = run_lcm_upgrade(srv)
+
+                    if status == 'DONE':
+                        note = 'DONE: LCM Updates Completed - Quitting'
+                        logging.critical(str(srv) + ' ' + str(note))
+                        job_status[srv] = str(note)
+                        sleep(60)
+
+                        return
+
+                    elif status == 'FAILED':
+                        note = 'FAILED: LCM Updates Failed - Quitting'
+                        logging.critical(str(srv) + ' ' + str(note))
+                        job_status[srv] = str(note)
+                        sleep(60)
+
+                        return
 
                 sleep(10)
                 print('=============================== ENDING', str(srv))
