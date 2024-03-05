@@ -282,12 +282,13 @@ def run_lcm_upgrade(srv):
         rec_spec.entity_types = ["software"]
 
         recommendations = lcm_instance.get_recommendations(async_req=False, body=rec_spec)
-        print('recommendations', recommendations)
-        
+        # print('recommendations', recommendations)
+
         update_info = []
         for rec in recommendations.data["entityUpdateSpecs"]:
 
             entity_matches = [entity for entity in entities.data if entity.uuid == rec["entityUuid"]]
+            print('entity_matches', entity_matches)
 
             if len(entity_matches) > 0:
                 update_info.append(
