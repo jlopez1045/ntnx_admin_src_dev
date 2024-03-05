@@ -290,10 +290,7 @@ def run_lcm_upgrade(srv):
             return 'DONE'
 
         else:
-            # generate LCM upgrade notifications
-            lcm_instance = ntnx_lcm_py_client.api.NotificationsApi(api_client=client)
 
-            print("Generating LCM Upgrade Notifications ...")
             entity_update_specs = EntityUpdateSpecs()
             entity_update_specs.entity_update_specs = []
 
@@ -324,10 +321,10 @@ def run_lcm_upgrade(srv):
 
                     # runs update
                     update = lcm_instance.update(async_req=False, body=update_spec)
-                    # print('update', str(update))
+                    print('update', str(update.data))
 
                     # ===== Monitor =====
-                    task_ext_id = update.data['extId']
+                    task_ext_id = update.data.extid
                     task_name = 'Update'
 
                     duration = utils.monitor_task(
