@@ -325,13 +325,36 @@ def run_lcm_upgrade(srv):
                     update_task_ext_id = update.data["extId"]
 
                     sleep(15)
-                    
-                    status = check_task_uuid(srv, update_task_ext_id)
-                    print('check_lcm_task', status)
 
-                    note = f"LCM: Update duration: {duration}."
-                    logging.critical(str(srv) + ' ' + str(note))
-                    job_status[srv] = str(note)
+                    while True:
+                        status = check_task_uuid(srv, update_task_ext_id)
+                        # print('check_lcm_task', status)
+
+                        if status == 'FAILED':
+                            note = "FAILED: LCM Update"
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+
+                            return
+
+                        elif status == 'DONE':
+                            note = "RUNNING: LCM Update Completed"
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+
+                            break
+
+                        elif status == 'RUNNING':
+                            note = "RUNNING: LCM Update"
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+
+                        else:
+                            note = "RUNNING: LCM " + str(status)
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+
+                        sleep(120)
 
                 else:
                     note = "LCM: Updates cancelled."
@@ -537,10 +560,18 @@ def check_task_uuid(srv, uuid):
 
         json_response = execute_api(req_type='get', srv=srv, auth=prism_auth_header, api_endpoint=api_endpoint, payload=payload)
 
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Response', str(json_response))
+        # print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Response', str(json_response))
 
-        if json_response == 'FAILED':
+        resposne = str(json_response.get('progress_status')).upper()
+
+        if resposne == 'FAILED':
             return 'FAILED'
+        elif resposne == 'RUNNING':
+            return 'RUNNING'
+        elif resposne == 'SUCCEEDED':
+            return 'DONE'
+        else:
+            return resposne
 
     except Exception as msg:
         print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
