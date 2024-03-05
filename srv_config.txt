@@ -15,3 +15,4 @@ proxy_password =
 
 [SETTINGS]
 logger_file = log.out
+poll_timeout = 60

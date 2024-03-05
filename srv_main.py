@@ -68,6 +68,7 @@ proxy_host = config.get('PROXY', 'proxy_host')
 proxy_port = config.get('PROXY', 'proxy_port')
 
 logfile = config.get('SETTINGS', 'logger_file')
+poll_timeout = config.get('SETTINGS', 'poll_timeout')
 
 # ============================================================================================================================================================================================== Utility
 
