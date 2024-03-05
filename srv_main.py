@@ -17,7 +17,9 @@ from pexpect import pxssh
 from pathlib import Path
 from packaging.version import Version
 import inspect
+
 import ntnx_lcm_py_client
+from ntnx_lcm_py_client.rest import ApiException as LCMException
 
 from ntnx_lcm_py_client.Ntnx.lcm.v4.common.PrecheckSpec import PrecheckSpec
 from ntnx_lcm_py_client.Ntnx.lcm.v4.common.EntityUpdateSpec import EntityUpdateSpec
@@ -736,13 +738,13 @@ def record_status(job_status, logging):
 
     while True:
 
-        print('****************************************************** STATUS START')
+        print('****************************************************** STATUS ***** START')
 
         for key, value in job_status.items():
             print('Server: ' + str(key), 'Status: ' + str(value))
             logging.critical('Server: ' + str(key) + ' Status: ' + str(value))
 
-        print('******************************************************   STATUS END')
+        print('****************************************************** STATUS ******* END')
 
         sleep(120)  # 2 min
 
@@ -750,9 +752,6 @@ def record_status(job_status, logging):
 def upgrade_loop(srv, build, job_status, logging):
 
     try:
-        job_download = False
-        job_upgrade = False
-        job_lcm_path = False
 
         task_rolling_reboot = False
         task_genesis_restart = False
@@ -853,7 +852,6 @@ def upgrade_loop(srv, build, job_status, logging):
         while True:
 
             '''
-            
             note = 'ACTION: check_upgrade_task'
             logging.info(str(srv) + ' ' + str(note))
             job_status[str(srv)] = str(note)
