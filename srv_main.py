@@ -248,39 +248,6 @@ def run_lcm_inventory(srv):
         return 'FAILED'
 
 
-def run_lcm_inventory_b(srv):
-    utils = Utils(pc_ip=srv, username=prism_username, password=prism_password)
-
-    client = connect_ntnx_lcm_client(srv)
-
-    inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
-    api_response = inventoryApi.inventory()
-
-    # ===== Monitor =====
-    task_ext_id = api_response.data["extId"]
-    task_name = 'Inventory'
-
-    duration = utils.monitor_task(
-        task_ext_id=task_ext_id,
-        task_name=task_name,
-        pc_ip=utils.prism_config.host,
-        username=utils.prism_config.username,
-        password=utils.prism_config.password,
-        poll_timeout=poll_timeout
-    )
-    print(f"Inventory duration: {duration}.")
-    # ===== Monitor =====
-
-    note = f"LCM: Inventory duration: {duration}."
-    logging.critical(str(srv) + ' ' + str(note))
-    job_status[srv] = str(note)
-
-    if api_response:
-        return 'DONE'
-    else:
-        return 'FAILED'
-
-
 def run_lcm_upgrade(srv):
     try:
 
@@ -597,76 +564,6 @@ def check_task_loop(srv, uuid, task_name):
             job_status[srv] = str(note)
 
         sleep(60)
-
-
-def check_lcm_upgrade_task(srv):
-    try:
-
-        api_endpoint = 'PrismGateway/services/rest/v2.0/tasks/list'
-
-        payload = {}
-
-        json_response = execute_api(req_type='post', srv=srv, auth=prism_auth_header, api_endpoint=api_endpoint, payload=payload)
-
-        # print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Response', str(json_response))
-
-        if json_response == 'FAILED':
-            return 'FAILED'
-
-        entities_list = json_response['entities']
-        # entities_list.sort(lambda x: x['start_time_usecs'])
-
-        if len(entities_list) == 0:
-            return 'MISSING'
-
-        task_names = ['klcmroottask']
-
-        found_matching_task = False
-        pass_upgrade = False
-
-        for task in task_names:
-
-            for x in reversed(entities_list):
-
-                task_created_time = x['create_time_usecs']
-                age_in_hours = convert_time(task_created_time)
-
-                if age_in_hours < 24:
-
-                    if str(x['operation_type']).lower() == task:
-
-                        found_matching_task = True
-
-                        percentage = x['percentage_complete']
-                        progress = x['progress_status']
-
-                        if str(progress).upper() == 'SUCCEEDED':
-
-                            return 'DONE'
-
-                        elif str(progress).upper() == 'RUNNING':
-
-                            return 'RUNNING: LCM Task Percentage: ' + str(percentage) + ' %'
-
-                        elif str(progress).upper() == 'FAILED':
-                            task = "FAILED: LCM Task"
-
-                            pass_upgrade = False
-
-        if not pass_upgrade:
-
-            if found_matching_task:
-                task = "FAILED: LCM Task"
-            else:
-                task = 'MISSING'
-            return task
-
-        else:
-            return 'MISSING'
-
-    except Exception as msg:
-        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
-        return 'FAILED'
 
 
 def check_upgrade_task(srv):
@@ -994,14 +891,66 @@ def upgrade_loop(srv, build, job_status, logging):
                             uuid = status[0]
 
                             if status == 'FAILED FUNCTION':
-                                note = 'FAILED: LCM Task Check - Quitting'
-                                logging.critical(str(srv) + ' ' + str(note))
-                                job_status[srv] = str(note)
-                                return
+
+                                if retry_count_upgrade > 3:
+                                    note = 'FAILED: LCM Updates Failed - Quitting'
+                                    logging.critical(str(srv) + ' ' + str(note))
+                                    job_status[srv] = str(note)
+                                    return
+
+                                if not task_drive_clean:
+                                    note = 'ACTION: clean_home_drive A - Attempt ' + str(retry_count_upgrade)
+                                    logging.info(str(srv) + ' ' + str(note))
+                                    job_status[str(srv)] = str(note)
+
+                                    clean_home_drive(srv)
+                                    task_drive_clean = True
+
+                                    status = run_lcm_upgrade(srv)
+
+                                    if status == 'FAILED':
+                                        note = 'FAILED: LCM Inventory - Quitting'
+                                        logging.critical(str(srv) + ' ' + str(note))
+                                        job_status[srv] = str(note)
+                                        return
+
+                                    elif status == 'CURRENT':
+                                        note = 'DONE: LCM is Current - Quitting'
+                                        logging.critical(str(srv) + ' ' + str(note))
+                                        job_status[srv] = str(note)
+                                        return
+
+                                    continue
+
+                                elif not task_lcm_cleanup:
+                                    note = 'ACTION: cleanup_lcm B - Attempt ' + str(retry_count_upgrade)
+                                    logging.info(str(srv) + ' ' + str(note))
+                                    job_status[str(srv)] = str(note)
+
+                                    cleanup_lcm(srv)
+                                    task_lcm_cleanup = True
+
+                                    status = run_lcm_upgrade(srv)
+
+                                    if status == 'FAILED':
+                                        note = 'FAILED: LCM Inventory - Quitting'
+                                        logging.critical(str(srv) + ' ' + str(note))
+                                        job_status[srv] = str(note)
+                                        return
+
+                                    elif status == 'CURRENT':
+                                        note = 'DONE: LCM is Current - Quitting'
+                                        logging.critical(str(srv) + ' ' + str(note))
+                                        job_status[srv] = str(note)
+                                        return
+
+                                    continue
 
                             elif 'NONE' in status:
 
                                 status = run_lcm_upgrade(srv)
+
+                                task_count_lcm_updates = task_count_lcm_updates + 1
 
                                 if status == 'FAILED':
                                     note = 'FAILED: LCM Update - Quitting'
@@ -1023,6 +972,12 @@ def upgrade_loop(srv, build, job_status, logging):
 
                                 if status == 'FAILED':
                                     note = 'FAILED: LCM Update - Quitting'
+                                    logging.critical(str(srv) + ' ' + str(note))
+                                    job_status[srv] = str(note)
+                                    return
+
+                                elif status == 'CURRENT':
+                                    note = 'DONE: LCM is Current - Quitting'
                                     logging.critical(str(srv) + ' ' + str(note))
                                     job_status[srv] = str(note)
                                     return
