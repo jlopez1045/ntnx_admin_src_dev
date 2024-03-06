@@ -486,10 +486,14 @@ def check_lcm_task(srv):
         if api_response:
 
             data = api_response['_GetLcmStatusApiResponse__data']
-            print('check_lcm_task', str(data))
+            # print('check_lcm_task', str(data))
 
-            var_uuid = str(data['inProgressOperation'].get('uuid')).upper()
-            var_task = str(data['inProgressOperation'].get('type')).upper()
+            try:
+                var_uuid = str(data['inProgressOperation'].get('uuid')).upper()
+                var_task = str(data['inProgressOperation'].get('type')).upper()
+            except:
+                var_uuid = str(data['in_progress_operation'].get('uuid')).upper()
+                var_task = str(data['in_progress_operation'].get('type')).upper()
 
             if var_uuid:
                 print('check_lcm_task', str(var_uuid), str(var_task).upper())
