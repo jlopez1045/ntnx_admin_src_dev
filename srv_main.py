@@ -585,7 +585,7 @@ def check_task_loop(srv, uuid, task_name):
 
             return 'DONE'
 
-        elif status == 'RUNNING':
+        elif 'RUNNING' in status:
             percent_complete = str(status).split(' ')
             note = "RUNNING: " + str(task_name) + " - " + str(percent_complete[1]) + str('%')
             logging.critical(str(srv) + ' ' + str(note))
