@@ -501,7 +501,9 @@ def check_lcm_task(srv):
         else:
             return 'FAILED FUNCTION'
 
-    except:
+    except Exception as msg:
+        print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)
+        job_status[str(srv)] = 'FAILED: ' + str(inspect.currentframe().f_code.co_name) + str(msg)
         return 'FAILED FUNCTION'
 
 
