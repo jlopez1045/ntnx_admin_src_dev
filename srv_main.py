@@ -492,7 +492,7 @@ def check_lcm_task(srv):
             var_task = str(data['inProgressOperation'].get('type')).upper()
 
             if var_uuid:
-                print('check_lcm_task', str(var_uuid), str(var_task).upper())
+                # print('check_lcm_task', str(var_uuid), str(var_task).upper())
                 return str(var_uuid), str(var_task).upper()
 
             else:
