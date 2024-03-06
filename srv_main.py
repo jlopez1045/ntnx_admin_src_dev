@@ -486,6 +486,7 @@ def check_lcm_task(srv):
         if api_response:
 
             data = api_response['_GetLcmStatusApiResponse__data']
+            print(type(data))
             # print('check_lcm_task', str(data))
 
             try:
