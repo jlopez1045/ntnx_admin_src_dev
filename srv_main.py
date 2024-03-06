@@ -952,7 +952,7 @@ def upgrade_loop(srv, build, job_status, logging):
                             job_status[srv] = str(note)
                             return
 
-                        elif status == 'NONE':
+                        elif 'NONE' in str(status):
 
                             status = run_lcm_inventory(srv)
 
@@ -1004,7 +1004,7 @@ def upgrade_loop(srv, build, job_status, logging):
                             job_status[srv] = str(note)
                             return
 
-                        elif status == 'NONE':
+                        elif 'NONE' in str(status):
 
                             status = run_lcm_upgrade(srv)
 
