@@ -486,7 +486,7 @@ def check_lcm_task(srv):
         if api_response:
 
             data = api_response['_GetLcmStatusApiResponse__data']
-            # print('check_lcm_task', data['inProgressOperation'])
+            print('check_lcm_task', data['inProgressOperation'])
 
             var_uuid = str(data['inProgressOperation'].get('uuid')).upper()
             var_task = str(data['inProgressOperation'].get('type')).upper()
@@ -885,7 +885,7 @@ def upgrade_loop(srv, build, job_status, logging):
 
                     if job_lcm_upgrade:
 
-                        while task_count_lcm_updates < 3:
+                        while task_count_lcm_updates < int(upgrade_attempts):
 
                             status = check_lcm_task(srv)
                             uuid = status[0]
