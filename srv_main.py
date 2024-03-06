@@ -236,9 +236,39 @@ def run_lcm_inventory(srv):
 
     inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
     api_response = inventoryApi.inventory()
+    task_ext_id = api_response.data["extId"]
 
     if api_response:
-        return 'DONE'
+        sleep(15)
+
+        while True:
+            status = check_task_uuid(srv, task_ext_id)
+
+            if status == 'FAILED':
+                note = "FAILED: LCM Inventory"
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+
+                return 'FAILED'
+
+            elif status == 'DONE':
+                note = "RUNNING: LCM Inventory Completed"
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+
+                return 'DONE'
+
+            elif status == 'RUNNING':
+                note = "RUNNING: LCM Inventory"
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+
+            else:
+                note = "RUNNING: LCM " + str(status)
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+
+            sleep(120)
     else:
         return 'FAILED'
 
@@ -952,7 +982,7 @@ def upgrade_loop(srv, build, job_status, logging):
                             job_status[srv] = str(note)
                             return
 
-                        elif 'NONE' in str(status):
+                        elif status == 'NONE':
 
                             status = run_lcm_inventory(srv)
 
@@ -982,7 +1012,7 @@ def upgrade_loop(srv, build, job_status, logging):
                                 sleep(60)
                                 continue
 
-                            elif 'NONE' in str(status).upper():
+                            elif status == 'NONE':
                                 sleep(15)
                                 break
 
@@ -1004,7 +1034,7 @@ def upgrade_loop(srv, build, job_status, logging):
                             job_status[srv] = str(note)
                             return
 
-                        elif 'NONE' in str(status):
+                        elif status == 'NONE':
 
                             status = run_lcm_upgrade(srv)
 
