@@ -577,7 +577,7 @@ def check_lcm_task(srv):
 
             if var_uuid:
                 print('check_lcm_task', str(var_task))
-                return str(var).upper()
+                return str(var_task).upper()
 
             else:
                 return 'NONE'
