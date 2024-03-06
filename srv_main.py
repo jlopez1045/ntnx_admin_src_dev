@@ -486,13 +486,13 @@ def check_lcm_task(srv):
         if api_response:
 
             data = api_response['_GetLcmStatusApiResponse__data']
-            print('check_lcm_task', data['inProgressOperation'])
+            # print('check_lcm_task', data['inProgressOperation'])
 
             var_uuid = str(data['inProgressOperation'].get('uuid')).upper()
             var_task = str(data['inProgressOperation'].get('type')).upper()
 
             if var_uuid:
-                # print('check_lcm_task', str(var_uuid), str(var_task).upper())
+                print('check_lcm_task', str(var_uuid), str(var_task).upper())
                 return str(var_uuid), str(var_task).upper()
 
             else:
