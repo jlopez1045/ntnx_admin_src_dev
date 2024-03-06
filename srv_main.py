@@ -492,9 +492,11 @@ def check_lcm_task(srv):
             try:
                 var_uuid = str(data['inProgressOperation'].get('uuid')).upper()
                 var_task = str(data['inProgressOperation'].get('type')).upper()
+                print('check_lcm_task', 'A')
             except:
                 var_uuid = str(data['in_progress_operation'].get('uuid')).upper()
                 var_task = str(data['in_progress_operation'].get('type')).upper()
+                print('check_lcm_task', 'B')
 
             print('check_lcm_task', str(var_uuid), str(var_task).upper())
 
