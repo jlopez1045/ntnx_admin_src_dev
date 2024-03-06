@@ -63,6 +63,8 @@ prism_username = config.get('USER', 'prism_username')
 cli_username = config.get('USER', 'cli_username')
 domain_suffix = config.get('USER', 'domain_suffix')
 
+upgrade_attempts = config.get('UPGRADE', 'upgrade_attempts')
+upgrade_method = config.get('UPGRADE', 'upgrade_method')
 aos_build = config.get('UPGRADE', 'aos_build')
 
 proxy_scheme = config.get('PROXY', 'proxy_scheme')
@@ -230,6 +232,18 @@ def run_aos_upgrade(srv, build):
 
 
 def run_lcm_inventory(srv):
+    client = connect_ntnx_lcm_client(srv)
+
+    inventoryApi = ntnx_lcm_py_client.InventoryApi(api_client=client)
+    api_response = inventoryApi.inventory()
+
+    if api_response:
+        return 'DONE'
+    else:
+        return 'FAILED'
+
+
+def run_lcm_inventory_b(srv):
     utils = Utils(pc_ip=srv, username=prism_username, password=prism_password)
 
     client = connect_ntnx_lcm_client(srv)
@@ -517,24 +531,30 @@ def check_download_status(srv, build):
 
 
 def check_lcm_task(srv):
-    client = connect_ntnx_lcm_client(srv)
+    try:
+        client = connect_ntnx_lcm_client(srv)
 
-    statusApi = ntnx_lcm_py_client.StatusApi(api_client=client)
-    api_response = vars(statusApi.get_status())
+        statusApi = ntnx_lcm_py_client.StatusApi(api_client=client)
+        api_response = vars(statusApi.get_status())
 
-    if api_response:
+        if api_response:
 
-        data = api_response['_GetLcmStatusApiResponse__data']
-        # print('check_lcm_task', data['inProgressOperation'])
+            data = api_response['_GetLcmStatusApiResponse__data']
+            # print('check_lcm_task', data['inProgressOperation'])
 
-        var = str(data['inProgressOperation'].get('type')).upper()
-        if var:
-            return str(var).upper()
+            var = str(data['inProgressOperation'].get('type')).upper()
+            if var:
+                print('check_lcm_task', var)
+                return str(var).upper()
+
+            else:
+                return 'NONE'
+
         else:
-            return 'NONE'
+            return 'FAILED FUNCTION'
 
-    else:
-        return 'FAILED'
+    except:
+        return 'FAILED FUNCTION'
 
 
 def check_task_uuid(srv, uuid):
@@ -837,364 +857,397 @@ def upgrade_loop(srv, build, job_status, logging):
         retry_count_download = 0
         retry_count_upgrade = 0
 
+        # ===== Ping Check ===== Start
         pingable = check_ping(srv)
         if not pingable:
             job_status[srv] = 'FAILED: Ping Test - Quitting'
             return
+        # ===== Ping Check ===== End
 
-        # ===== Password Check =====
+        # ===== Password Check ===== Start
         status = connect_ssh(srv, "echo 'I am Connected'", cli_username, cli_password)
         if status == 'FAILED':
-            note = 'FAILED: Password Check - CLI Account - ' + str(cli_username)
+            note = 'FAILED: Password Check - CLI Account - ' + str(cli_username) + ' - Quitting'
             logging.critical(str(srv) + ' ' + str(note))
             job_status[srv] = str(note)
             return
 
-        sleep(5)
+        sleep(2)
 
         status = get_cluster_info(srv)
         if status == 'FAILED':
-            note = 'FAILED: Password Check - Prism Account - ' + str(prism_username)
+            note = 'FAILED: Password Check - Prism Account - ' + str(prism_username) + ' - Quitting'
             logging.critical(str(srv) + ' ' + str(note))
             job_status[srv] = str(note)
             return
-        # ===== Password Check =====
+        # ===== Password Check ===== End
 
         sleep(5)
 
-        cluster_ver = get_cluster_build(srv)
+        # ===== AOS Cluster Version Check ===== Start
 
-        if cluster_ver == 'FAILED':
-            note = 'FAILED: Password Check - Cli Account - ' + str(cli_username)
-            logging.critical(str(srv) + ' ' + str(note))
-            job_status[srv] = str(note)
-            return
+        if upgrade_method == 'aos_only':
 
-        elif Version(cluster_ver) >= Version(build):  # No upgrade needed
-            note = 'Current: ' + str(cluster_ver) + ' Quitting'
-            logging.critical(str(srv) + ' ' + str(note))
-            job_status[str(srv)] = str(note)
-            return
+            cluster_ver = get_cluster_build(srv)
 
-        elif Version(cluster_ver) > Version('6.5.0'):  # If above ver 6.5.0
-            note = 'Current: ' + str(cluster_ver) + ' Upgrade Needed'
-            logging.critical(str(srv) + ' ' + str(note))
+            if cluster_ver == 'FAILED':
+                note = 'FAILED: Password Check - Cli Account - ' + str(cli_username) + ' - Quitting'
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[srv] = str(note)
+                return
+
+            elif Version(cluster_ver) >= Version(build):  # No upgrade needed
+                note = 'Current: ' + str(cluster_ver) + ' - Quitting'
+                logging.critical(str(srv) + ' ' + str(note))
+                job_status[str(srv)] = str(note)
+                return
+
+            else:
+                note = 'Current: ' + str(cluster_ver) + ' - Upgrade Needed'
+                logging.critical(str(srv) + ' ' + str(note))
+
+        # ===== AOS Cluster Version Check ===== End
+
+        # ===== Set Upgrade Path ===== Start
+
+        if upgrade_method == 'aos_only':
+
+            job_lcm_inventory = False
+            job_lcm_upgrade = False
+            job_download = True
+            job_upgrade = True
+
+        elif upgrade_method == 'lcm_only':
 
             job_lcm_inventory = True
             job_lcm_upgrade = True
             job_download = False
             job_upgrade = False
 
-        else:  # below version AOS 6.5.0
-            job_lcm_inventory = False
-            job_lcm_upgrade = False
-            job_download = True
-            job_upgrade = True
+        else:
+
+            note = 'ERROR: ' + str(cluster_ver) + ' Upgrade Method missing - Quitting'
+            logging.critical(str(srv) + ' ' + str(note))
+            return
+
+        # ===== Set Upgrade Path ===== End
 
         while True:
 
-            if job_lcm_inventory or job_lcm_upgrade:
+            if upgrade_method == 'lcm_only':
 
-                if job_lcm_inventory:
+                if job_lcm_inventory or job_lcm_upgrade:
 
-                    status = check_lcm_task(srv)
-
-                    if status == 'FAILED':
-                        note = 'FAILED: LCM Task Check - Quitting'
-                        logging.critical(str(srv) + ' ' + str(note))
-                        job_status[srv] = str(note)
-                        return
-
-                    elif status == 'NONE':
-
-                        status = run_lcm_inventory(srv)
-                        if status == 'FAILED':
-                            note = 'FAILED: LCM Inventory - Quitting'
-                            logging.critical(str(srv) + ' ' + str(note))
-                            job_status[srv] = str(note)
-                            return
-
-                    sleep(15)
-
-                    while True:
+                    if job_lcm_inventory:
 
                         status = check_lcm_task(srv)
 
-                        if status == 'FAILED':
+                        if status == 'FAILED FUNCTION':
                             note = 'FAILED: LCM Task Check - Quitting'
                             logging.critical(str(srv) + ' ' + str(note))
                             job_status[srv] = str(note)
                             return
 
-                        elif status == 'INVENTORY':
-                            note = 'RUNNING: LCM ' + str(status)
-                            logging.critical(str(srv) + ' ' + str(note))
-                            job_status[srv] = str(note)
-                            sleep(60)
-                            continue
+                        elif status == 'NONE':
 
-                        else:
-                            note = 'RUNNING: LCM ' + str(status)
-                            logging.critical(str(srv) + ' ' + str(note))
-                            job_status[srv] = str(note)
+                            status = run_lcm_inventory(srv)
 
-                            sleep(15)
-                            break
-
-                if job_lcm_upgrade:
-
-                    while True:
-
-                        status = check_lcm_upgrade_task(srv)
-
-                        if 'FAILED' in status:
-                            note = str(status)
-                            logging.critical(str(srv) + ' ' + str(note))
-                            job_status[srv] = str(note)
-                            return
-
-                        elif status == 'DONE':
-                            note = 'DONE: LCM Updates Completed - Quitting'
-                            logging.critical(str(srv) + ' ' + str(note))
-                            job_status[srv] = str(note)
-                            return
-
-                        elif status == 'MISSING':
-                            break
-
-                        else:
-                            note = str(status)
-                            logging.critical(str(srv) + ' ' + str(note))
-                            job_status[srv] = str(note)
-
-                        sleep(120)
-
-                    sleep(15)
-
-                    while True:
-
-                        status = run_lcm_upgrade(srv)
-
-                        if status == 'DONE':
-                            note = 'DONE: LCM Updates Completed - Quitting'
-                            logging.critical(str(srv) + ' ' + str(note))
-                            job_status[srv] = str(note)
-                            return
-
-                        elif status == 'FAILED':
-
-                            retry_count_upgrade = retry_count_upgrade + 1
-
-                            if retry_count_upgrade > 3:
-                                note = 'FAILED: LCM Updates Failed - Quitting'
+                            if status == 'FAILED':
+                                note = 'FAILED: LCM Inventory - Quitting'
                                 logging.critical(str(srv) + ' ' + str(note))
                                 job_status[srv] = str(note)
                                 return
 
-                            if not task_drive_clean:
-                                note = 'ACTION: clean_home_drive A - Attempt ' + str(retry_count_upgrade)
-                                logging.info(str(srv) + ' ' + str(note))
-                                job_status[str(srv)] = str(note)
+                        sleep(15)
 
-                                clean_home_drive(srv)
-                                task_drive_clean = True
+                        while True:  # LCM Inventory Loop
 
-                                sleep(120)
+                            status = check_lcm_task(srv)
+
+                            if status == 'FAILED':
+                                note = 'FAILED: LCM Task Check - Quitting'
+                                logging.critical(str(srv) + ' ' + str(note))
+                                job_status[srv] = str(note)
+                                return
+
+                            elif 'INVENTORY' in str(status).upper():
+                                note = 'RUNNING: LCM ' + str(status)
+                                logging.critical(str(srv) + ' ' + str(note))
+                                job_status[srv] = str(note)
+
+                                sleep(60)
                                 continue
 
-                            elif not task_lcm_cleanup:
-                                cleanup_lcm(srv)
+                            else:
+                                note = 'RUNNING: LCM ' + str(status)
+                                logging.critical(str(srv) + ' ' + str(note))
+                                job_status[srv] = str(note)
 
-                                note = 'ACTION: cleanup_lcm B - Attempt ' + str(retry_count_upgrade)
-                                logging.info(str(srv) + ' ' + str(note))
-                                job_status[str(srv)] = str(note)
+                                sleep(15)
+                                break
 
-                                cleanup_lcm(srv)
-                                task_lcm_cleanup = True
+                    if job_lcm_upgrade:
 
-                                sleep(120)
-                                continue
+                        status = check_lcm_task(srv)
+
+                        if status == 'FAILED FUNCTION':
+                            note = 'FAILED: LCM Task Check - Quitting'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            return
+
+                        elif status == 'NONE':
+
+                            status = run_lcm_upgrade(srv)
+
+                            if status == 'FAILED':
+                                note = 'FAILED: LCM Update - Quitting'
+                                logging.critical(str(srv) + ' ' + str(note))
+                                job_status[srv] = str(note)
+                                return
+
+                        sleep(15)
+
+                        while True:  # LCM Update Loop
+
+                            status = check_lcm_upgrade_task(srv)
+
+                            try:
+                                status_b = check_lcm_task(srv)
+                                print('status_b', status_b)
+                            except:
+                                pass
+
+                            if 'FAILED' in status:
+
+                                retry_count_upgrade = retry_count_upgrade + 1
+
+                                if retry_count_upgrade > 3:
+                                    note = 'FAILED: LCM Updates Failed - Quitting'
+                                    logging.critical(str(srv) + ' ' + str(note))
+                                    job_status[srv] = str(note)
+                                    return
+
+                                if not task_drive_clean:
+                                    note = 'ACTION: clean_home_drive A - Attempt ' + str(retry_count_upgrade)
+                                    logging.info(str(srv) + ' ' + str(note))
+                                    job_status[str(srv)] = str(note)
+
+                                    clean_home_drive(srv)
+                                    task_drive_clean = True
+
+                                    sleep(120)
+                                    continue
+
+                                elif not task_lcm_cleanup:
+                                    cleanup_lcm(srv)
+
+                                    note = 'ACTION: cleanup_lcm B - Attempt ' + str(retry_count_upgrade)
+                                    logging.info(str(srv) + ' ' + str(note))
+                                    job_status[str(srv)] = str(note)
+
+                                    cleanup_lcm(srv)
+                                    task_lcm_cleanup = True
+
+                                    sleep(120)
+                                    continue
+
+                            elif 'DONE' in status:
+                                note = 'DONE: LCM Updates Completed - Quitting'
+                                logging.critical(str(srv) + ' ' + str(note))
+                                job_status[srv] = str(note)
+                                return
+
+                            elif 'MISSING' in status:
+                                break
+
+                            else:
+                                note = str(status)
+                                logging.critical(str(srv) + ' ' + str(note))
+                                job_status[srv] = str(note)
 
                             sleep(120)
 
-                sleep(10)
-                print('=============================== ENDING', str(srv))
-                return
+                    sleep(10)
+                    print('=============================== ENDING', str(srv))
+                    return
 
-            elif job_download:
+            elif upgrade_method == 'aos_only':
 
-                note = 'ACTION: check_download_status'
-                logging.info(str(srv) + ' ' + str(note))
-                job_status[str(srv)] = str(note)
+                if job_download:
 
-                status = check_download_status(srv, build)
+                    note = 'ACTION: check_download_status'
+                    logging.info(str(srv) + ' ' + str(note))
+                    job_status[str(srv)] = str(note)
 
-                note = 'DOWNLOAD: ' + str(status)
-                logging.info(str(srv) + ' ' + str(note))
-                job_status[str(srv)] = str(note)
+                    status = check_download_status(srv, build)
 
-                retry_count_download = retry_count_download + 1
+                    note = 'DOWNLOAD: ' + str(status)
+                    logging.info(str(srv) + ' ' + str(note))
+                    job_status[str(srv)] = str(note)
 
-                if (status == 'AVAILABLE') or (status == 'FAILED'):
-                    if not task_drive_clean:
-                        note = 'ACTION: clean_home_drive A - Attempt ' + str(retry_count_download)
-                        logging.info(str(srv) + ' ' + str(note))
-                        job_status[str(srv)] = str(note)
+                    retry_count_download = retry_count_download + 1
 
-                        clean_home_drive(srv)
-                        task_drive_clean = True
+                    if (status == 'AVAILABLE') or (status == 'FAILED'):
+                        if not task_drive_clean:
+                            note = 'ACTION: clean_home_drive A - Attempt ' + str(retry_count_download)
+                            logging.info(str(srv) + ' ' + str(note))
+                            job_status[str(srv)] = str(note)
 
+                            clean_home_drive(srv)
+                            task_drive_clean = True
+
+                            sleep(120)
+                            continue
+
+                        elif not task_memory_clean:
+                            note = 'ACTION: clear_memory A - Attempt ' + str(retry_count_download)
+                            logging.info(str(srv) + ' ' + str(note))
+                            job_status[str(srv)] = str(note)
+
+                            clear_memory(srv)
+                            task_memory_clean = True
+
+                            sleep(120)
+                            continue
+
+                        elif not task_lcm_cleanup:
+                            cleanup_lcm(srv)
+
+                            note = 'ACTION: cleanup_lcm B - Attempt ' + str(retry_count_download)
+                            logging.info(str(srv) + ' ' + str(note))
+                            job_status[str(srv)] = str(note)
+
+                            cleanup_lcm(srv)
+                            task_lcm_cleanup = True
+
+                            sleep(120)
+                            continue
+
+                        if retry_count_download > 4:
+                            note = 'FAILED: check_download_status A - Quitting'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            return
+
+                        else:
+                            download_aos(srv, build)
+                            sleep(120)
+                            continue
+
+                    elif status == 'INPROGRESS':
                         sleep(120)
                         continue
 
-                    elif not task_memory_clean:
-                        note = 'ACTION: clear_memory A - Attempt ' + str(retry_count_download)
-                        logging.info(str(srv) + ' ' + str(note))
-                        job_status[str(srv)] = str(note)
-
-                        clear_memory(srv)
-                        task_memory_clean = True
-
-                        sleep(120)
-                        continue
-
-                    elif not task_lcm_cleanup:
-                        cleanup_lcm(srv)
-
-                        note = 'ACTION: cleanup_lcm B - Attempt ' + str(retry_count_download)
-                        logging.info(str(srv) + ' ' + str(note))
-                        job_status[str(srv)] = str(note)
-
-                        cleanup_lcm(srv)
-                        task_lcm_cleanup = True
-
-                        sleep(120)
-                        continue
-
-                    if retry_count_download > 4:
-                        note = 'FAILED: check_download_status A - Quitting'
+                    elif status == 'COMPLETED':
+                        note = 'DONE: download_aos ' + str(status)
                         logging.critical(str(srv) + ' ' + str(note))
                         job_status[srv] = str(note)
-                        return
 
-                    else:
-                        download_aos(srv, build)
-                        sleep(120)
+                        job_download = False
+                        job_upgrade = True
+
                         continue
 
-                elif status == 'INPROGRESS':
-                    sleep(120)
-                    continue
+                elif job_upgrade:
 
-                elif status == 'COMPLETED':
-                    note = 'DONE: download_aos ' + str(status)
-                    logging.critical(str(srv) + ' ' + str(note))
-                    job_status[srv] = str(note)
+                    note = 'ACTION: check_upgrade_task'
+                    logging.info(str(srv) + ' ' + str(note))
+                    job_status[str(srv)] = str(note)
 
-                    job_download = False
-                    job_upgrade = True
+                    status = check_upgrade_task(srv)
 
-                    continue
-
-            elif job_upgrade:
-
-                note = 'ACTION: check_upgrade_task'
-                logging.info(str(srv) + ' ' + str(note))
-                job_status[str(srv)] = str(note)
-
-                status = check_upgrade_task(srv)
-
-                note = 'UPGRADE: ' + str(status)
-                logging.info(str(srv) + ' ' + str(note))
-                job_status[str(srv)] = str(note)
-
-                if 'DONE' in status:
-                    cluster_ver = get_cluster_build(srv)
-
-                    if cluster_ver == 'FAILED':
-                        note = 'FAILED: get_cluster_build - Quitting'
-                        logging.critical(str(srv) + ' ' + str(note))
-                        job_status[srv] = str(note)
-                        return
-
-                    elif Version(cluster_ver) >= Version(build):  # No upgrade needed
-                        note = 'Current: ' + str(cluster_ver) + ' Quitting'
-                        logging.critical(str(srv) + ' ' + str(note))
-                        job_status[str(srv)] = str(note)
-                        return
-
-                    else:
-                        note = 'Current: ' + str(cluster_ver)
-                        logging.critical(str(srv) + ' ' + str(note))
-                        job_status[str(srv)] = str(note)
-
-                        sleep(120)
-                        continue
-
-                elif 'RUNNING' in status:
                     note = 'UPGRADE: ' + str(status)
-                    logging.critical(str(srv) + ' ' + str(note))
+                    logging.info(str(srv) + ' ' + str(note))
                     job_status[str(srv)] = str(note)
 
-                    sleep(120)
-                    continue
+                    if 'DONE' in status:
+                        cluster_ver = get_cluster_build(srv)
 
-                elif 'MISSING' in status:
-                    note = 'ACTION: run_aos_upgrade A'
-                    logging.critical(str(srv) + ' ' + str(note))
-                    job_status[str(srv)] = str(note)
+                        if cluster_ver == 'FAILED':
+                            note = 'FAILED: get_cluster_build - Quitting'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[srv] = str(note)
+                            return
 
-                    run_aos_upgrade(srv, build)
+                        elif Version(cluster_ver) >= Version(build):  # No upgrade needed
+                            note = 'Current: ' + str(cluster_ver) + ' Quitting'
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[str(srv)] = str(note)
+                            return
 
-                    sleep(120)
-                    continue
+                        else:
+                            note = 'Current: ' + str(cluster_ver)
+                            logging.critical(str(srv) + ' ' + str(note))
+                            job_status[str(srv)] = str(note)
 
-                elif 'FAILED' in status:
+                            sleep(120)
+                            continue
 
-                    retry_count_upgrade = retry_count_upgrade + 1
-
-                    if retry_count_upgrade > 3:
-                        job_status[srv] = 'FAILED: Upgrade Task - Quitting'
-                        return
-
-                    if not task_rolling_reboot:
-                        note = 'ACTION: rolling_reboot_cvm A / Attempt: ' + str(retry_count_upgrade)
-                        logging.info(str(srv) + ' ' + str(note))
+                    elif 'RUNNING' in status:
+                        note = 'UPGRADE: ' + str(status)
+                        logging.critical(str(srv) + ' ' + str(note))
                         job_status[str(srv)] = str(note)
-
-                        rolling_reboot_cvm(srv)
-                        task_rolling_reboot = True
 
                         sleep(120)
                         continue
 
-                    '''
-                    elif not task_genesis_restart:
-                        note = 'ACTION: reset_genesis A / Attempt: ' + str(retry_count_upgrade)
-                        logging.info(str(srv) + ' ' + str(note))
+                    elif 'MISSING' in status:
+                        note = 'ACTION: run_aos_upgrade A'
+                        logging.critical(str(srv) + ' ' + str(note))
                         job_status[str(srv)] = str(note)
 
-                        reset_genesis(srv)
-                        task_genesis_restart = True
+                        run_aos_upgrade(srv, build)
 
                         sleep(120)
                         continue
-                    '''
 
-                    note = 'ACTION: run_aos_upgrade B / Attempt: ' + str(retry_count_upgrade)
-                    logging.critical(str(srv) + ' ' + str(note))
-                    job_status[str(srv)] = str(note)
+                    elif 'FAILED' in status:
 
-                    run_aos_upgrade(srv, build)
+                        retry_count_upgrade = retry_count_upgrade + 1
 
-                    sleep(120)
-                    continue
+                        if retry_count_upgrade > 3:
+                            job_status[srv] = 'FAILED: Upgrade Task - Quitting'
+                            return
 
-                elif status == 'ERROR':
-                    note = 'ERROR: check_upgrade_task - Retrying '
-                    logging.critical(str(srv) + ' ' + str(note))
-                    job_status[srv] = str(note)
-                    continue
+                        if not task_rolling_reboot:
+                            note = 'ACTION: rolling_reboot_cvm A / Attempt: ' + str(retry_count_upgrade)
+                            logging.info(str(srv) + ' ' + str(note))
+                            job_status[str(srv)] = str(note)
+
+                            rolling_reboot_cvm(srv)
+                            task_rolling_reboot = True
+
+                            sleep(120)
+                            continue
+
+                        '''
+                        elif not task_genesis_restart:
+                            note = 'ACTION: reset_genesis A / Attempt: ' + str(retry_count_upgrade)
+                            logging.info(str(srv) + ' ' + str(note))
+                            job_status[str(srv)] = str(note)
+    
+                            reset_genesis(srv)
+                            task_genesis_restart = True
+    
+                            sleep(120)
+                            continue
+                        '''
+
+                        note = 'ACTION: run_aos_upgrade B / Attempt: ' + str(retry_count_upgrade)
+                        logging.critical(str(srv) + ' ' + str(note))
+                        job_status[str(srv)] = str(note)
+
+                        run_aos_upgrade(srv, build)
+
+                        sleep(120)
+                        continue
+
+                    elif status == 'ERROR':
+                        note = 'ERROR: check_upgrade_task - Retrying '
+                        logging.critical(str(srv) + ' ' + str(note))
+                        job_status[srv] = str(note)
+                        continue
 
     except Exception as msg:
         print('=====', str(srv), inspect.currentframe().f_code.co_name, 'Error on line {}'.format(sys.exc_info()[-1].tb_lineno), type(msg).__name__, msg)

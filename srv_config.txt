@@ -4,6 +4,9 @@ cli_username = nutanix
 domain_suffix = statestr.com
 
 [UPGRADE]
+upgrade_attempts = 5
+# upgrade_method = lcm_only
+upgrade_method = aos_only
 aos_build = 6.5.5.5
 
 [PROXY]
